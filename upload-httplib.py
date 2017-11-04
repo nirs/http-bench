@@ -36,9 +36,8 @@ start = time.time()
 
 conn = client.HTTPSConnection(url.netloc)
 
-# TODO: link to patch adding this.
-if hasattr(conn, "blocksize"):
-    conn.blocksize = BLOCK_SIZE
+# See XXX for the patch adding this
+conn.blocksize = BLOCK_SIZE
 
 conn.putrequest("PUT", url.path)
 conn.putheader("Content-Length", "%d" % (size,))
