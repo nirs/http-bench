@@ -12,14 +12,14 @@ Create a virtual environment for every python version you want to test:
 ### Python 2
 
     $ pip install virtualenv
-    $ virtualenv py27
-    $ source py27/bin/activate
+    $ virtualenv py/27
+    $ source py/27/bin/activate
     $ pip install -r requirements.txt
 
 ## Python 3
 
-    $ python3.5 -m venv py35
-    $ source py27/bin/activate
+    $ python3.5 -m venv py/35
+    $ source py/27/bin/activate
     $ pip install -r requirements.txt
 
 
