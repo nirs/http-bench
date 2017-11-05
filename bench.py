@@ -10,12 +10,7 @@ import time
 
 from contextlib import contextmanager
 
-# Python 2/3 compatibility. Don't use six to allow testing with python 3.7
-# build that does not have six installed.
-try:
-    from urllib.parse import urlparse, urlunparse
-except ImportError:
-    from urlparse import urlparse, urlunparse
+from six.moves.urllib.parse import urlparse, urlunparse
 
 KIB = 1024
 MIB = 1024 * KIB

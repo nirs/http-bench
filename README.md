@@ -5,13 +5,32 @@ Benchmark tools for python HTTP I/O. Was written for optimizing
 [ovirt-engine-sdk](https://github.com/ovirt/ovirt-engine-sdk).
 
 
-## Requirements
+## Setup
 
-- python2 (for testing python 2)
-- python3 (for testing python 3)
-- requests (for testing requests)
-- golang (for the go server and client)
-- make
+Create a virtual environment for every python version you want to test:
+
+### Python 2
+
+    $ pip install virtualenv
+    $ virtualenv py27
+    $ source py27/bin/activate
+    $ pip install -r requirements.txt
+
+## Python 3
+
+    $ python3.5 -m venv py35
+    $ source py27/bin/activate
+    $ pip install -r requirements.txt
+
+
+### Installing go
+
+To use the go server or client, you need to install the golang and make
+packages
+
+On Fedora:
+
+    $ sudo dnf install golang make
 
 
 ## Building
