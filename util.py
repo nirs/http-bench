@@ -9,6 +9,8 @@ class LimitedReader(object):
         self._size = size
         self._limit = size
 
+    # httplib requires a reader (object with a read(n) method)
+
     def read(self, n=None):
         if n is None:
             n = self._limit
@@ -18,18 +20,21 @@ class LimitedReader(object):
         self._limit -= len(chunk)
         return chunk
 
+    # Ugly hacks for the requests library
+
     def __iter__(self):
         """
-        Fake iterator to fool requests that it can pass this to the underlying
-        connection, that case only about read().
+        Fake iterator to fool requests to pass this file-like object to the
+        underlying connection. The underlying connection only care about the
+        read() method.
         """
         raise NotImplemented
 
     def __len__(self):
         """
-        Used by requests to set the content-length
-
-        Need because the server does not support chunked encoding, and reqires
-        content-length.
+        Unlike httplib or go net/http, that do not try to magically get the
+        length of the file, and allow the user to set the content-length
+        header, requests try various magic behhind your back.  Defining this
+        force requests to set a content-length header.
         """
         return self._size
