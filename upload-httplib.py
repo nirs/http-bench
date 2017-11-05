@@ -2,13 +2,12 @@
 Benchmrk for uploading files using httplib.
 """
 
-from __future__ import print_function
-
 import ssl
-import sys
-import time
 
-import util
+# Disable certificate verification, not interesitng for this test
+ssl._create_default_https_context = ssl._create_unverified_context
+
+import sys
 
 # Python 2/3 compatibility. Don't use six to allow testing with python 3.7
 # build that does not have six installed.
@@ -17,41 +16,21 @@ try:
 except ImportError:
     import httplib as client
 
-try:
-    from urllib.parse import urlparse
-except ImportError:
-    from urlparse import urlparse
+import bench
 
-# Disable certificate verification, not interesitng for this test
-ssl._create_default_https_context = ssl._create_unverified_context
+with bench.run() as args:
+    conn = client.HTTPSConnection(args.url.netloc)
 
-BLOCK_SIZE = 512 * 1024
-MB = 1024**2
-GB = 1024**3
+    # See XXX for the patch adding this
+    conn.blocksize = args.buffer_size
 
-size = int(sys.argv[1]) * GB
-url = urlparse(sys.argv[2])
+    conn.putrequest("PUT", args.url.path)
+    conn.putheader("Content-Length", "%d" % (args.size,))
+    conn.endheaders()
 
-start = time.time()
+    with open(args.file, "rb") as f:
+        f = bench.LimitedReader(f, args.size)
+        conn.send(f)
 
-conn = client.HTTPSConnection(url.netloc)
-
-# See XXX for the patch adding this
-conn.blocksize = BLOCK_SIZE
-
-conn.putrequest("PUT", url.path)
-conn.putheader("Content-Length", "%d" % (size,))
-conn.endheaders()
-
-with open("/dev/zero", "rb") as f:
-    f = util.LimitedReader(f, size)
-    conn.send(f)
-
-resp = conn.getresponse()
-
-elapsed = time.time() - start
-
-assert resp.status == 200
-
-print("Uploaded %.2fg in %.2f seconds (%.2fm/s)" % (
-      float(size) / GB, elapsed, float(size) / MB / elapsed))
+    resp = conn.getresponse()
+    assert resp.status == 200

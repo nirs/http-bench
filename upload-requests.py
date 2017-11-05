@@ -2,31 +2,15 @@
 Benchmrk for uploading files using requests.
 """
 
-from __future__ import print_function
-
-import sys
-import time
-
 import requests
-import util
+import bench
 
-BLOCK_SIZE = 512 * 1024
-MB = 1024**2
-GB = 1024**3
+with bench.run() as args:
+    with open(args.file, "rb") as f:
+        f = bench.LimitedReader(f, args.size)
+        url = bench.urlunparse(args.url)
 
-size = int(sys.argv[1]) * GB
-url = sys.argv[2]
+        # verify=False to disable certificate verification.
+        resp = requests.put(url, data=f, verify=False)
 
-start = time.time()
-
-# verify=False to disable certificate verification.
-with open("/dev/zero", "rb") as f:
-    f = util.LimitedReader(f, size)
-    r = requests.put(url, data=f, verify=False)
-
-elapsed = time.time() - start
-
-assert r.status_code == 200
-
-print("Uploaded %.2fg in %.2f seconds (%.2fm/s)" % (
-    float(size) / GB, elapsed, float(size) / MB / elapsed))
+    assert resp.status_code == 200
