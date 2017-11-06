@@ -7,7 +7,7 @@ import bench
 
 with bench.run() as args:
     with open(args.file, "rb") as f:
-        f = bench.LimitedReader(f, args.size)
+        f = bench.LimitedFile(f, args.size, args.buffer_size)
         url = bench.urlunparse(args.url)
 
         # verify=False to disable certificate verification.

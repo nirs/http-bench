@@ -10,6 +10,7 @@ import time
 
 from contextlib import contextmanager
 
+import six
 from six.moves.urllib.parse import urlparse, urlunparse
 
 KIB = 1024
@@ -74,39 +75,48 @@ def parse_args():
     return args
 
 
-class LimitedReader(object):
+class LimitedFile(object):
 
-    def __init__(self, reader, size):
-        self._read = reader.read
+    def __init__(self, reader, size, buffer_size=8192):
+        self._reader = reader
         self._size = size
+        self._buffer_size = buffer_size
         self._limit = size
 
-    # httplib requires a reader (object with a read(n) method)
-
-    def read(self, n=None):
-        if n is None:
-            n = self._limit
-        else:
-            n = min(n, self._limit)
-        chunk = self._read(n)
-        self._limit -= len(chunk)
-        return chunk
-
-    # Ugly hacks for the requests library
+    if six.PY2:
+        def read(self, n=None):
+            """
+            Readable interface for python 2. Python 3 will use more efficient
+            __iter__ if read is not define.
+            """
+            return self._read(n)
 
     def __iter__(self):
         """
-        Fake iterator to fool requests to pass this file-like object to the
-        underlying connection. The underlying connection only care about the
-        read() method.
+        Help requests to use streaming. Not used in python 2, but in python 3
+        this allows controlling the blocksize.
         """
-        raise NotImplemented
+        while True:
+            chunk = self._read(self._buffer_size)
+            if not chunk:
+                break
+            yield chunk
 
     def __len__(self):
         """
         Unlike httplib or go net/http, that do not try to magically get the
         length of the file, and allow the user to set the content-length
         header, requests try various magic behhind your back.  Defining this
-        force requests to set a content-length header.
+        force requests to set a content-length header and use indentity
+        transfer encoding.
         """
         return self._size
+
+    def _read(self, n=None):
+        if n is None:
+            n = self._limit
+        else:
+            n = min(n, self._limit)
+        chunk = self._reader.read(n)
+        self._limit -= len(chunk)
+        return chunk

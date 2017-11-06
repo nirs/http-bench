@@ -16,16 +16,10 @@ import bench
 with bench.run() as args:
     conn = http_client.HTTPSConnection(args.url.netloc)
 
-    # See XXX for the patch adding this
-    conn.blocksize = args.buffer_size
-
-    conn.putrequest("PUT", args.url.path)
-    conn.putheader("Content-Length", "%d" % (args.size,))
-    conn.endheaders()
-
     with open(args.file, "rb") as f:
-        f = bench.LimitedReader(f, args.size)
-        conn.send(f)
+        f = bench.LimitedFile(f, args.size, args.buffer_size)
+        conn.request("PUT", args.url.path, body=f,
+                     headers={"Content-Length": str(args.size)})
 
     resp = conn.getresponse()
     assert resp.status == 200

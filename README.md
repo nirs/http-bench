@@ -66,11 +66,7 @@ specify the size of the upload:
 
     $ python upload-httplib.py --size-gb 10 /dev/zero http://localhost:8000/
 
-To test how buffer size effects the throughput, you need to build
-python 3.7 with this patch:
-https://github.com/python/cpython/pull/4279
-
-This example uses buffer size of 512 KiB:
+To test how buffer size effects the throughput:
 
     $ python upload-httplib.py --buffer-size-kb 512 --size-gb 10 /dev/zero http://localhost:8000/
 
