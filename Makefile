@@ -1,3 +1,7 @@
+envs = $(wildcard py/*/bin/activate)
+
+.PHONY: $(envs)
+
 all: upload serve
 
 upload: upload.go
@@ -5,3 +9,10 @@ upload: upload.go
 
 serve: serve.go
 	go build $<
+
+test: $(envs)
+
+$(envs):
+	source $@; \
+		pytest -vs test.py; \
+		deactivate

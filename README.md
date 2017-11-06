@@ -38,6 +38,14 @@ On Fedora:
     $ make
 
 
+## Running the throughput tests
+
+To run the tests with all the python virtual environments you created
+under py:
+
+    $ make test
+
+
 ## Measuring upload throughput
 
 Start the go server:
