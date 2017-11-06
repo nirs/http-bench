@@ -45,6 +45,10 @@ under py:
 
     $ make test
 
+To run only single python version:
+
+    $ make py/27/bin/activate
+
 
 ## Measuring upload throughput
 
