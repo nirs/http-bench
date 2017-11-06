@@ -17,7 +17,7 @@ with bench.run() as args:
     conn = http_client.HTTPSConnection(args.url.netloc)
 
     with open(args.file, "rb") as f:
-        f = bench.LimitedFile(f, args.size, args.buffer_size)
+        f = bench.LimitedFile(f, args.size, args.blocksize)
         conn.request("PUT", args.url.path, body=f,
                      headers={"Content-Length": str(args.size)})
 

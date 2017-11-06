@@ -47,12 +47,12 @@ def parse_args():
         help=("upload size in GiB (default file size). Must be specied when "
               "uploading character special file like /dev/zero."))
     parser.add_argument(
-        "--buffer-size-kb",
+        "--blocksize-kb",
         "-b",
-        dest="buffer_size",
+        dest="blocksize",
         type=kibibyte,
         default=8192,
-        help="buffer size in KiB (default 8)")
+        help="block size in KiB (default 8 KiB)")
     parser.add_argument(
         "file",
         help=("file to upload. Can be a file, a block device like /dev/sdb, "
@@ -77,10 +77,10 @@ def parse_args():
 
 class LimitedFile(object):
 
-    def __init__(self, reader, size, buffer_size=8192):
+    def __init__(self, reader, size, blocksize=8192):
         self._reader = reader
         self._size = size
-        self._buffer_size = buffer_size
+        self._blocksize = blocksize
         self._limit = size
 
     if six.PY2:
@@ -97,7 +97,7 @@ class LimitedFile(object):
         this allows controlling the blocksize.
         """
         while True:
-            chunk = self._read(self._buffer_size)
+            chunk = self._read(self._blocksize)
             if not chunk:
                 break
             yield chunk
