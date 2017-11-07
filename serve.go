@@ -34,7 +34,7 @@ func handler(w http.ResponseWriter, r *http.Request) {
 
 	start := time.Now()
 
-	if _, err := drop(r); err != nil {
+	if _, err := discard(r); err != nil {
 		fail(w, r, err.Error(), http.StatusBadRequest)
 		return
 	}
@@ -57,9 +57,8 @@ func log(r *http.Request, event string, format string, args ...interface{}) {
 	fmt.Printf("[%s] %s %s %q: %s\n", r.RemoteAddr, event, r.Method, r.URL.Path, message)
 }
 
-func drop(r *http.Request) (n int64, err error) {
+func discard(r *http.Request) (n int64, err error) {
 	buf := make([]byte, bufSize)
 	reader := io.LimitReader(r.Body, r.ContentLength)
-
 	return io.CopyBuffer(ioutil.Discard, reader, buf)
 }
