@@ -67,19 +67,16 @@ func main() {
 	req.ContentLength = size
 
 	// We don't care about certificates validation in this test
+	// WriteBufSize requires https://go-review.googlesource.com/#/c/go/+/76410/
 	insecureTransport := &http.Transport{
 		TLSClientConfig:    &tls.Config{InsecureSkipVerify: true},
 		DisableCompression: true,
+		WriteBufSize:       128 * 1024,
 	}
 
 	client := &http.Client{Transport: insecureTransport}
 
 	start := time.Now()
-
-	// TODO: find a way to configure the copy buffer size:
-	// strace show this write 4k chunks:
-	// [pid 32264] read(3, "\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0"..., 4096) = 4096
-	// [pid 32264] write(4, "\27\3\3\20\30\0\0\0\0\0\3l\"w\201\360W\307F=\215Zj&\6hj\253\343\20EN"..., 4125) = 4125
 
 	res, err := client.Do(req)
 	if err != nil {
