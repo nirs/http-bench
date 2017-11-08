@@ -55,7 +55,7 @@ func fail(w http.ResponseWriter, r *http.Request, msg string, code int) {
 
 func logEvent(r *http.Request, event string, format string, args ...interface{}) {
 	message := fmt.Sprintf(format, args...)
-	fmt.Printf("[%s] %s %s %q: %s\n", r.RemoteAddr, event, r.Method, r.URL.Path, message)
+	log.Printf("[%s] %s %s %q: %s", r.RemoteAddr, event, r.Method, r.URL.Path, message)
 }
 
 func discard(r *http.Request) (n int64, err error) {
