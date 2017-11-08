@@ -20,7 +20,7 @@ func main() {
 }
 
 func handler(w http.ResponseWriter, r *http.Request) {
-	log(r, "START", "(%.2fg)", float64(r.ContentLength)/float64(GB))
+	logEvent(r, "START", "(%.2fg)", float64(r.ContentLength)/float64(GB))
 
 	if r.Method != "PUT" {
 		fail(w, r, "Unsupported method", http.StatusMethodNotAllowed)
@@ -41,18 +41,18 @@ func handler(w http.ResponseWriter, r *http.Request) {
 
 	elapsed := time.Since(start).Seconds()
 
-	log(r, "FINISH", "(%.2fg in %.2f seconds, %.2fm/s)",
+	logEvent(r, "FINISH", "(%.2fg in %.2f seconds, %.2fm/s)",
 		float64(r.ContentLength)/float64(GB),
 		elapsed,
 		float64(r.ContentLength)/float64(MB)/elapsed)
 }
 
 func fail(w http.ResponseWriter, r *http.Request, msg string, code int) {
-	log(r, "ERROR", msg)
+	logEvent(r, "ERROR", msg)
 	http.Error(w, msg, code)
 }
 
-func log(r *http.Request, event string, format string, args ...interface{}) {
+func logEvent(r *http.Request, event string, format string, args ...interface{}) {
 	message := fmt.Sprintf(format, args...)
 	fmt.Printf("[%s] %s %s %q: %s\n", r.RemoteAddr, event, r.Method, r.URL.Path, message)
 }
