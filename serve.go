@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"log"
 	"net/http"
 	"time"
 )
@@ -16,7 +17,7 @@ const (
 
 func main() {
 	http.HandleFunc("/", handler)
-	http.ListenAndServeTLS(":8000", "cert.pem", "key.pem", nil)
+	log.Fatal(http.ListenAndServeTLS(":8000", "cert.pem", "key.pem", nil))
 }
 
 func handler(w http.ResponseWriter, r *http.Request) {
