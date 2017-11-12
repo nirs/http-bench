@@ -5,6 +5,7 @@ upload
 # Python
 *.pyc
 __pycache__/
+.cache/
 
 # Virtual enviroments
 py/
