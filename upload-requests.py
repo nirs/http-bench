@@ -2,12 +2,36 @@
 Benchmrk for uploading files using requests.
 """
 
+import sys
+
 import requests
+
 import bench
+import util
+
+
+class RequestsIterator(util.BlockIterator):
+    """
+    Ugly hacks for requests.
+    """
+
+    def __init__(self, reader, blocksize, size):
+        super(RequestsIterator, self).__init__(reader, blocksize)
+        # Needed by requests to use indentity transfer encoding.
+        self.len = size
+
+    if sys.version_info[0] == 2:
+        # In python 2 HTTPConnection.send() will try to use a read() method. In
+        # python 3, if we don't have a read method, it will try to iterate over
+        # the object.
+        def read(self, n):
+            return self._reader.read(n)
+
 
 with bench.run() as args:
     with open(args.file, "rb") as f:
-        f = bench.LimitedFile(f, args.size, args.blocksize)
+        f = util.LimitedReader(f, args.size)
+        f = RequestsIterator(f, args.blocksize, args.size)
         url = bench.urlunparse(args.url)
 
         # verify=False to disable certificate verification.

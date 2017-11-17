@@ -12,14 +12,36 @@ import sys
 from six.moves import http_client
 
 import bench
+import util
 
 with bench.run() as args:
     conn = http_client.HTTPSConnection(args.url.netloc)
 
     with open(args.file, "rb") as f:
-        f = bench.LimitedFile(f, args.size, args.blocksize)
-        conn.request("PUT", args.url.path, body=f,
-                     headers={"Content-Length": str(args.size)})
+        f = util.LimitedReader(f, args.size)
+
+        if sys.version_info[0] == 2:
+            # In python 2 we need to use the low level apis and reimplemnt the
+            # read/write loop:
+            conn.putrequest("PUT", args.url.path)
+            conn.putheader("Content-Length", str(args.size))
+            conn.endheaders()
+            while True:
+                chunk = f.read(args.blocksize)
+                if not chunk:
+                    break
+                conn.send(chunk)
+        else:
+            # In Python 3 we can use the high level apis.
+            if sys.version_info[1] < 7:
+                # Before < 3.7, we need to wrap the file with an iterator to
+                # control the block size.
+                f = util.BlockIterator(f, args.blocksize)
+            else:
+                # In 3.7, we can set the connection block size.
+                conn.blocksize = args.blocksize
+            conn.request("PUT", args.url.path, body=f,
+                         headers={"Content-Length": str(args.size)})
 
     resp = conn.getresponse()
     assert resp.status == 200
