@@ -29,7 +29,7 @@ def upload(mod, blocksize_kb):
     cmd = [
         "python",
         "upload-%s.py" % mod,
-        "--size-gb", "1",
+        "--size-mb", "1024",
         "--blocksize-kb", str(blocksize_kb),
         "/dev/zero", "https://localhost:8000/"
     ]

@@ -11,7 +11,6 @@ import (
 
 const (
 	MB      = 1 << 20
-	GB      = 1 << 30
 	bufSize = 1 * MB
 )
 
@@ -21,7 +20,7 @@ func main() {
 }
 
 func handler(w http.ResponseWriter, r *http.Request) {
-	logEvent(r, "START", "(%.2fg)", float64(r.ContentLength)/float64(GB))
+	logEvent(r, "START", "(%.2f MiB)", float64(r.ContentLength)/float64(MB))
 
 	if r.Method != "PUT" {
 		fail(w, r, "Unsupported method", http.StatusMethodNotAllowed)
@@ -42,8 +41,8 @@ func handler(w http.ResponseWriter, r *http.Request) {
 
 	elapsed := time.Since(start).Seconds()
 
-	logEvent(r, "FINISH", "(%.2fg in %.2f seconds, %.2fm/s)",
-		float64(r.ContentLength)/float64(GB),
+	logEvent(r, "FINISH", "(%.2f MiB in %.2f seconds, %.2f MiB/s)",
+		float64(r.ContentLength)/float64(MB),
 		elapsed,
 		float64(r.ContentLength)/float64(MB)/elapsed)
 }
