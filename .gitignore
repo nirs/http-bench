@@ -8,4 +8,7 @@ __pycache__/
 .cache/
 
 # Virtual enviroments
-py/
+.tox
+
+# setup generated files
+MANIFEST

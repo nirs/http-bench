@@ -7,19 +7,8 @@ Benchmark tools for python HTTP I/O. Was written for optimizing
 
 ## Setup
 
-Create a virtual environment for every python version you want to test:
+Install requirements:
 
-### Python 2
-
-    $ pip install virtualenv
-    $ virtualenv py/27
-    $ source py/27/bin/activate
-    $ pip install -r requirements.txt
-
-## Python 3
-
-    $ python3.5 -m venv py/35
-    $ source py/27/bin/activate
     $ pip install -r requirements.txt
 
 
@@ -40,14 +29,13 @@ On Fedora:
 
 ## Running the throughput tests
 
-To run the tests with all the python virtual environments you created
-under py:
+To run the tests with all install python versions:
 
     $ make test
 
-To run only single python version:
+To run with specific python version:
 
-    $ make py/27/bin/activate
+    $ tox -e py27
 
 
 ## Measuring upload throughput
