@@ -1,5 +1,7 @@
 # http-bench
 
+[![Build Status](https://travis-ci.org/nirs/http-bench.svg?branch=master)](https://travis-ci.org/nirs/http-bench)
+
 Benchmark tools for python HTTP I/O. Was written for optimizing
 [ovirt-imageio](https://github.com/ovirt/ovirt-imageio), and
 [ovirt-engine-sdk](https://github.com/ovirt/ovirt-engine-sdk).
