@@ -1,6 +1,6 @@
 # Built go tools
 serve
-upload
+upload-go
 
 # Python
 *.pyc

@@ -1,6 +1,6 @@
-all: upload serve
+all: upload-go serve
 
-upload: upload.go
+upload-go: upload-go.go
 	go build $<
 
 serve: serve.go
