@@ -83,4 +83,5 @@ To test how block size effects the throughput:
 
 - upload-httplib.py - using httplib (http.client on python 3)
 - upload-requests.py - using the requests library
-- upload.go - go version, using HTTP/2 or HTTP/1.1 (always upload from /dev/zero)
+- upload.go - go version, using HTTP/2 or HTTP/1.1. This tool ignores
+  the --blocksize-kb option since go uses hardcoded value of 4kb.

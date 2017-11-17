@@ -24,8 +24,13 @@ def server():
 @pytest.mark.parametrize("variant", ["httplib", "requests"])
 @pytest.mark.parametrize("blocksize",
     [8, 32, 64, 128, 256, 512, 1024, 2048, 4096])
-def test_single_upload(server, variant, blocksize):
+def test_single_upload_python(server, variant, blocksize):
     print(upload(variant, blocksize))
+
+
+def test_single_upload_go(server):
+    # Go uses hardcoded value, not way to change the blocksize.
+    print(upload("go", 4))
 
 
 def upload(variant, blocksize_kb):
