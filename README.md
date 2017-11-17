@@ -33,6 +33,12 @@ To run the tests with all install python versions:
 
     $ make test
 
+The default test use upload size of 1024 MiB, which takes couple of
+seconds to upload. If you want to run the tests quickly, you can specify
+a smaller upload size using environment variable:
+
+    UPLOAD_SIZE_MB=1 make test
+
 To run with specific python version:
 
     $ tox -e py27

@@ -1,7 +1,10 @@
+import os
 import subprocess
 import threading
 
 import pytest
+
+SIZE_MB = os.environ.get("UPLOAD_SIZE_MB", "1024")
 
 
 @pytest.fixture(scope="session")
@@ -29,7 +32,7 @@ def upload(mod, blocksize_kb):
     cmd = [
         "python",
         "upload-%s.py" % mod,
-        "--size-mb", "1024",
+        "--size-mb", SIZE_MB,
         "--blocksize-kb", str(blocksize_kb),
         "/dev/zero", "https://localhost:8000/"
     ]
