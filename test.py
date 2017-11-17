@@ -21,17 +21,16 @@ def server():
         t.join()
 
 
-@pytest.mark.parametrize("mod", ["httplib", "requests"])
+@pytest.mark.parametrize("variant", ["httplib", "requests"])
 @pytest.mark.parametrize("blocksize",
     [8, 32, 64, 128, 256, 512, 1024, 2048, 4096])
-def test_single_upload(server, mod, blocksize):
-    print(upload(mod, blocksize))
+def test_single_upload(server, variant, blocksize):
+    print(upload(variant, blocksize))
 
 
-def upload(mod, blocksize_kb):
+def upload(variant, blocksize_kb):
     cmd = [
-        "python",
-        "upload-%s.py" % mod,
+        "./upload-%s" % variant,
         "--size-mb", SIZE_MB,
         "--blocksize-kb", str(blocksize_kb),
         "/dev/zero", "https://localhost:8000/"
