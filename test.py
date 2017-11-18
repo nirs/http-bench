@@ -46,9 +46,12 @@ def test_go_parallel(server):
 
 def upload_parallel(variant, blocksize_kb):
     cpu_count = os.sysconf("SC_NPROCESSORS_ONLN")
-    size_per_worker = SIZE_MB // cpu_count
-    if size_per_worker == 0:
-        size_per_worker = 1
+
+    size = SIZE_MB
+    if size < cpu_count:
+        size = cpu_count
+
+    size_per_worker = size // cpu_count
 
     def run():
         upload(variant, blocksize_kb, size_mb=size_per_worker)
@@ -70,7 +73,7 @@ def upload_parallel(variant, blocksize_kb):
     elapsed = time.time() - start
 
     return "Uploaded %.2f MiB in %.2f seconds using %d workers (%.2f MiB/s)" % (
-        SIZE_MB, elapsed, cpu_count, SIZE_MB / elapsed)
+        size, elapsed, cpu_count, size / elapsed)
 
 
 def upload(variant, blocksize_kb, size_mb=SIZE_MB):
