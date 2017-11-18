@@ -10,8 +10,7 @@ import time
 
 from contextlib import contextmanager
 
-import six
-from six.moves.urllib.parse import urlparse, urlunparse
+from six.moves.urllib.parse import urlparse
 
 KIB = 1024
 MIB = 1024 * KIB
@@ -69,6 +68,7 @@ def parse_args():
             f.seek(0, os.SEEK_END)
             args.size = f.tell()
         if args.size == 0:
-            parser.error("Cannot get %r size - please specify --size-mb" % args.file)
+            parser.error("Cannot get %r size - please specify --size-mb"
+                         % args.file)
 
     return args
