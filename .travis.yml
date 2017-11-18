@@ -14,8 +14,9 @@ install:
     - pip install -r requirements-travis.txt
 
 env:
-    - UPLOAD_SIZE_MB=1
-    - MAX_WORKERS=2
+    global:
+        - UPLOAD_SIZE_MB=1
+        - MAX_WORKERS=2
 
 script:
     - make
