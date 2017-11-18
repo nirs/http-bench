@@ -84,5 +84,5 @@ def upload(variant, blocksize_kb, size_mb=SIZE_MB):
     out, err = p.communicate()
     if p.returncode != 0:
         raise RuntimeError("Command failed: cmd=%s, rc=%s, out=%r, err=%r"
-                           % (cmd, rc, out, err))
+                           % (cmd, p.returncode, out, err))
     return out
