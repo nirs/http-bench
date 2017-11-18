@@ -6,6 +6,7 @@ import time
 import pytest
 
 SIZE_MB = int(os.environ.get("UPLOAD_SIZE_MB", "1024"))
+MAX_WORKERS = int(os.environ.get("MAX_WORKERS", "0"))
 
 
 @pytest.fixture(scope="session")
@@ -45,13 +46,16 @@ def test_go_parallel(server):
 
 
 def upload_parallel(variant, blocksize_kb):
-    cpu_count = os.sysconf("SC_NPROCESSORS_ONLN")
+    workers = os.sysconf("SC_NPROCESSORS_ONLN")
+
+    if MAX_WORKERS:
+        workers = min(workers, MAX_WORKERS)
 
     size = SIZE_MB
-    if size < cpu_count:
-        size = cpu_count
+    if size < workers:
+        size = workers
 
-    size_per_worker = size // cpu_count
+    size_per_worker = size // workers
 
     def run():
         upload(variant, blocksize_kb, size_mb=size_per_worker)
@@ -60,7 +64,7 @@ def upload_parallel(variant, blocksize_kb):
 
     threads = []
     try:
-        for i in range(cpu_count):
+        for i in range(workers):
             t = threading.Thread(target=run, name="upload/%d" % i)
             t.daemon = True
             t.start()
@@ -73,7 +77,7 @@ def upload_parallel(variant, blocksize_kb):
     elapsed = time.time() - start
 
     return "Uploaded %.2f MiB in %.2f seconds using %d workers (%.2f MiB/s)" % (
-        size, elapsed, cpu_count, size / elapsed)
+        size, elapsed, workers, size / elapsed)
 
 
 def upload(variant, blocksize_kb, size_mb=SIZE_MB):
