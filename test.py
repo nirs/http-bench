@@ -69,8 +69,8 @@ def upload_parallel(variant, blocksize_kb):
 
     elapsed = time.time() - start
 
-    return "Uploaded %.2f MiB in %.2f seconds (%.2f MiB/s)" % (
-        SIZE_MB, elapsed, SIZE_MB / elapsed)
+    return "Uploaded %.2f MiB in %.2f seconds using %d workers (%.2f MiB/s)" % (
+        SIZE_MB, elapsed, cpu_count, SIZE_MB / elapsed)
 
 
 def upload(variant, blocksize_kb, size_mb=SIZE_MB):
