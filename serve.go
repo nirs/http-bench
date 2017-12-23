@@ -12,13 +12,14 @@ import (
 )
 
 const (
+	KB = 1 << 10
 	MB = 1 << 20
 )
 
 var (
-	blocksize = flag.Int64(
-		"blocksize",
-		1024*1024,
+	blocksizeKB = flag.Int64(
+		"blocksize-kb",
+		1024,
 		`block size for copying data to storage.`)
 	output = flag.String(
 		"output",
@@ -32,7 +33,7 @@ var (
 
 func main() {
 	flag.Parse()
-	fmt.Printf("Using blocksize=%d\n", *blocksize)
+	fmt.Printf("Using blocksizeKB=%d\n", *blocksizeKB)
 	fmt.Printf("Using output=%s\n", *output)
 	http.HandleFunc("/", handler)
 	log.Fatal(http.ListenAndServeTLS(":8000", "cert.pem", "key.pem", nil))
@@ -77,7 +78,7 @@ func logEvent(r *http.Request, event string, format string, args ...interface{})
 }
 
 func write(r *http.Request) (n int64, err error) {
-	buf := make([]byte, *blocksize)
+	buf := make([]byte, *blocksizeKB*KB)
 	file, err := os.OpenFile(*output, os.O_WRONLY, 0)
 	if err != nil {
 		return 0, err
