@@ -7,6 +7,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"syscall"
 	"time"
 )
 
@@ -75,8 +76,8 @@ func write(r *http.Request) (n int64, err error) {
 	buf := make([]byte, *blocksize)
 	reader := io.LimitReader(r.Body, r.ContentLength)
 
-	var file *os.File
-	if file, err = os.OpenFile(*output, os.O_WRONLY, 0); err != nil {
+	file, err := os.OpenFile(*output, os.O_WRONLY, 0)
+	if err != nil {
 		return 0, err
 	}
 
@@ -85,7 +86,13 @@ func write(r *http.Request) (n int64, err error) {
 	}
 
 	if err = file.Sync(); err != nil {
-		return n, err
+		if errno(err) == syscall.EINVAL {
+			// Sync to /dev/null fails with EINVAL; ignore it
+			err = nil
+		} else {
+			fmt.Printf("%T %#v\n", err, err)
+			return n, err
+		}
 	}
 
 	if err = file.Close(); err != nil {
@@ -93,4 +100,18 @@ func write(r *http.Request) (n int64, err error) {
 	}
 
 	return n, nil
+}
+
+// errno unwraps syscall.Errno from wrapped errors.
+func errno(e error) syscall.Errno {
+	switch v := e.(type) {
+	case *os.PathError:
+		return errno(v.Err)
+	case *os.SyscallError:
+		return errno(v.Err)
+	case syscall.Errno:
+		return v
+	default:
+		return 0
+	}
 }
