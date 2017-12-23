@@ -21,6 +21,10 @@ var (
 		"blocksize-kb",
 		1024,
 		`block size for copying data to storage.`)
+	poolsize = flag.Int(
+		"poolsize",
+		2,
+		`number of buffers.`)
 	output = flag.String(
 		"output",
 		"/dev/null",
@@ -34,6 +38,7 @@ var (
 func main() {
 	flag.Parse()
 	fmt.Printf("Using blocksizeKB=%d\n", *blocksizeKB)
+	fmt.Printf("Using poolsize=%d\n", *poolsize)
 	fmt.Printf("Using output=%s\n", *output)
 	http.HandleFunc("/", handler)
 	log.Fatal(http.ListenAndServeTLS(":8000", "cert.pem", "key.pem", nil))
@@ -78,13 +83,12 @@ func logEvent(r *http.Request, event string, format string, args ...interface{})
 }
 
 func write(r *http.Request) (n int64, err error) {
-	buf := make([]byte, *blocksizeKB*KB)
-	file, err := os.OpenFile(*output, os.O_WRONLY, 0)
+	file, err := os.OpenFile(*output, os.O_RDWR, 0)
 	if err != nil {
 		return 0, err
 	}
 
-	if n, err = copyBuffer(file, r.Body, buf); err != nil {
+	if n, err = copyData(file, r.Body); err != nil {
 		return n, err
 	}
 
@@ -123,33 +127,36 @@ func errno(e error) syscall.Errno {
 	}
 }
 
-// copyBuffer copy all data from r to w using buf. This is basically
-// io.copyBuffer without the ReadFrom and WriteTo optimizations, and with
-// logging to understand how time is spent during copy.
-func copyBuffer(dst io.Writer, src io.Reader, buf []byte) (written int64, err error) {
+type data struct {
+	buf []byte
+	len int
+}
+
+type result struct {
+	written int64
+	err     error
+}
+
+func copyData(dst io.Writer, src io.Reader) (written int64, err error) {
+	pool := make(chan []byte, *poolsize)
+	work := make(chan *data, *poolsize)
+	done := make(chan *result)
+
+	for i := 0; i < *poolsize; i++ {
+		pool <- make([]byte, *blocksizeKB*KB)
+	}
+
+	go writer(dst, work, pool, done)
+
 	for {
+		buf := <-pool
 		start := time.Now()
 		nr, er := io.ReadFull(src, buf)
 		if *debug {
 			log.Printf("Read %d bytes in %.6f seconds\n", nr, time.Since(start).Seconds())
 		}
 		if nr > 0 {
-			start := time.Now()
-			nw, ew := dst.Write(buf[0:nr])
-			if *debug {
-				log.Printf("Wrote %d bytes in %.6f seconds\n", nw, time.Since(start).Seconds())
-			}
-			if nw > 0 {
-				written += int64(nw)
-			}
-			if ew != nil {
-				err = ew
-				break
-			}
-			if nr != nw {
-				err = io.ErrShortWrite
-				break
-			}
+			work <- &data{buf: buf, len: nr}
 		}
 		if er != nil {
 			// Getting less bytes or no bytes means the body is consumed.
@@ -159,5 +166,40 @@ func copyBuffer(dst io.Writer, src io.Reader, buf []byte) (written int64, err er
 			break
 		}
 	}
-	return written, err
+
+	close(work)
+	r := <-done
+
+	if err != nil {
+		return r.written, err
+	} else {
+		return r.written, r.err
+	}
+}
+
+func writer(dst io.Writer, work chan *data, pool chan []byte, done chan *result) {
+	var written int64
+	var err error
+
+	for w := range work {
+		start := time.Now()
+		nw, err := dst.Write(w.buf[0:w.len])
+		if *debug {
+			log.Printf("Wrote %d bytes in %.6f seconds\n", nw, time.Since(start).Seconds())
+		}
+		if nw > 0 {
+			written += int64(nw)
+		}
+		if err != nil {
+			break
+		}
+		if w.len != nw {
+			err = io.ErrShortWrite
+			break
+		}
+
+		pool <- w.buf
+	}
+
+	done <- &result{written, err}
 }
