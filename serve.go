@@ -128,7 +128,7 @@ func errno(e error) syscall.Errno {
 func copyBuffer(dst io.Writer, src io.Reader, buf []byte) (written int64, err error) {
 	for {
 		start := time.Now()
-		nr, er := src.Read(buf)
+		nr, er := io.ReadFull(src, buf)
 		if *debug {
 			log.Printf("Read %d bytes in %.6f seconds\n", nr, time.Since(start).Seconds())
 		}
@@ -151,7 +151,8 @@ func copyBuffer(dst io.Writer, src io.Reader, buf []byte) (written int64, err er
 			}
 		}
 		if er != nil {
-			if er != io.EOF {
+			// Getting less bytes or no bytes means the body is consumed.
+			if er != io.EOF && er != io.ErrUnexpectedEOF {
 				err = er
 			}
 			break
