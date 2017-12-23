@@ -4,9 +4,9 @@ import (
 	"flag"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"log"
 	"net/http"
+	"os"
 	"time"
 )
 
@@ -19,11 +19,16 @@ var (
 		"blocksize",
 		1024*1024,
 		`block size for copying data to storage.`)
+	output = flag.String(
+		"output",
+		"/dev/null",
+		`output file name; if not set output will be discarded.`)
 )
 
 func main() {
 	flag.Parse()
 	fmt.Printf("Using blocksize=%d\n", *blocksize)
+	fmt.Printf("Using output=%s\n", *output)
 	http.HandleFunc("/", handler)
 	log.Fatal(http.ListenAndServeTLS(":8000", "cert.pem", "key.pem", nil))
 }
@@ -43,7 +48,7 @@ func handler(w http.ResponseWriter, r *http.Request) {
 
 	start := time.Now()
 
-	if _, err := discard(r); err != nil {
+	if _, err := write(r); err != nil {
 		fail(w, r, err.Error(), http.StatusBadRequest)
 		return
 	}
@@ -66,8 +71,26 @@ func logEvent(r *http.Request, event string, format string, args ...interface{})
 	log.Printf("[%s] %s %s %q: %s", r.RemoteAddr, event, r.Method, r.URL.Path, message)
 }
 
-func discard(r *http.Request) (n int64, err error) {
+func write(r *http.Request) (n int64, err error) {
 	buf := make([]byte, *blocksize)
 	reader := io.LimitReader(r.Body, r.ContentLength)
-	return io.CopyBuffer(ioutil.Discard, reader, buf)
+
+	var file *os.File
+	if file, err = os.OpenFile(*output, os.O_WRONLY, 0); err != nil {
+		return 0, err
+	}
+
+	if n, err = io.CopyBuffer(file, reader, buf); err != nil {
+		return n, err
+	}
+
+	if err = file.Sync(); err != nil {
+		return n, err
+	}
+
+	if err = file.Close(); err != nil {
+		return n, err
+	}
+
+	return n, nil
 }
