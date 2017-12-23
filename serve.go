@@ -24,6 +24,10 @@ var (
 		"output",
 		"/dev/null",
 		`output file name; if not set output will be discarded.`)
+	debug = flag.Bool(
+		"debug",
+		false,
+		`enable debug logging.`)
 )
 
 func main() {
@@ -81,10 +85,11 @@ func write(r *http.Request) (n int64, err error) {
 		return 0, err
 	}
 
-	if n, err = io.CopyBuffer(file, reader, buf); err != nil {
+	if n, err = copyBuffer(file, reader, buf); err != nil {
 		return n, err
 	}
 
+	start := time.Now()
 	if err = file.Sync(); err != nil {
 		if errno(err) == syscall.EINVAL {
 			// Sync to /dev/null fails with EINVAL; ignore it
@@ -93,6 +98,9 @@ func write(r *http.Request) (n int64, err error) {
 			fmt.Printf("%T %#v\n", err, err)
 			return n, err
 		}
+	}
+	if *debug {
+		log.Printf("Synced in %.6f seconds\n", time.Since(start).Seconds())
 	}
 
 	if err = file.Close(); err != nil {
@@ -114,4 +122,42 @@ func errno(e error) syscall.Errno {
 	default:
 		return 0
 	}
+}
+
+// copyBuffer copy all data from r to w using buf. This is basically
+// io.copyBuffer without the ReadFrom and WriteTo optimizations, and with
+// logging to understand how time is spent during copy.
+func copyBuffer(dst io.Writer, src io.Reader, buf []byte) (written int64, err error) {
+	for {
+		start := time.Now()
+		nr, er := src.Read(buf)
+		if *debug {
+			log.Printf("Read %d bytes in %.6f seconds\n", nr, time.Since(start).Seconds())
+		}
+		if nr > 0 {
+			start := time.Now()
+			nw, ew := dst.Write(buf[0:nr])
+			if *debug {
+				log.Printf("Wrote %d bytes in %.6f seconds\n", nw, time.Since(start).Seconds())
+			}
+			if nw > 0 {
+				written += int64(nw)
+			}
+			if ew != nil {
+				err = ew
+				break
+			}
+			if nr != nw {
+				err = io.ErrShortWrite
+				break
+			}
+		}
+		if er != nil {
+			if er != io.EOF {
+				err = er
+			}
+			break
+		}
+	}
+	return written, err
 }
