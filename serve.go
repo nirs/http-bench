@@ -1,6 +1,7 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -10,11 +11,19 @@ import (
 )
 
 const (
-	MB      = 1 << 20
-	bufSize = 1 * MB
+	MB = 1 << 20
+)
+
+var (
+	blocksize = flag.Int64(
+		"blocksize",
+		1024*1024,
+		`block size for copying data to storage.`)
 )
 
 func main() {
+	flag.Parse()
+	fmt.Printf("Using blocksize=%d\n", *blocksize)
 	http.HandleFunc("/", handler)
 	log.Fatal(http.ListenAndServeTLS(":8000", "cert.pem", "key.pem", nil))
 }
@@ -58,7 +67,7 @@ func logEvent(r *http.Request, event string, format string, args ...interface{})
 }
 
 func discard(r *http.Request) (n int64, err error) {
-	buf := make([]byte, bufSize)
+	buf := make([]byte, *blocksize)
 	reader := io.LimitReader(r.Body, r.ContentLength)
 	return io.CopyBuffer(ioutil.Discard, reader, buf)
 }
