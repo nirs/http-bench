@@ -78,14 +78,12 @@ func logEvent(r *http.Request, event string, format string, args ...interface{})
 
 func write(r *http.Request) (n int64, err error) {
 	buf := make([]byte, *blocksize)
-	reader := io.LimitReader(r.Body, r.ContentLength)
-
 	file, err := os.OpenFile(*output, os.O_WRONLY, 0)
 	if err != nil {
 		return 0, err
 	}
 
-	if n, err = copyBuffer(file, reader, buf); err != nil {
+	if n, err = copyBuffer(file, r.Body, buf); err != nil {
 		return n, err
 	}
 
