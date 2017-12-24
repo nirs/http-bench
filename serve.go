@@ -26,6 +26,14 @@ var (
 		"poolsize",
 		2,
 		`number of buffers.`)
+	limitread = flag.Int(
+		"limit-read-mbps",
+		0,
+		"limit read rate in megabytes per seconds.")
+	limitwrite = flag.Int(
+		"limit-write-mbps",
+		0,
+		"limit write rate in megabytes per seconds.")
 	direct = flag.Bool(
 		"direct",
 		false,
@@ -43,8 +51,8 @@ var (
 		false,
 		`enable debug logging.`)
 
-	// Whether to measure time of every read/write operation.
-	measure = false
+	measureRead  = false
+	measureWrite = false
 )
 
 func main() {
@@ -52,12 +60,15 @@ func main() {
 
 	fmt.Printf("Using blocksizeKB=%v\n", *blocksizeKB)
 	fmt.Printf("Using poolsize=%v\n", *poolsize)
+	fmt.Printf("Using limitread=%v\n", *limitread)
+	fmt.Printf("Using limitwrite=%v\n", *limitwrite)
 	fmt.Printf("Using direct=%v\n", *direct)
 	fmt.Printf("Using output=%v\n", *output)
 	fmt.Printf("Using stats=%v\n", *stats)
 	fmt.Printf("Using debug=%v\n", *debug)
 
-	measure = *stats || *debug
+	measureRead = *stats || *debug || (*limitread != 0)
+	measureWrite = *stats || *debug || (*limitwrite != 0)
 
 	http.HandleFunc("/", handler)
 	log.Fatal(http.ListenAndServeTLS(":8000", "cert.pem", "key.pem", nil))
@@ -178,12 +189,17 @@ func copyData(dst io.Writer, src io.Reader) (written int64, err error) {
 	for {
 		buf := <-pool
 		var start time.Time
-		if measure {
+		if measureRead {
 			start = time.Now()
 		}
 		nr, er := io.ReadFull(src, buf)
-		if measure {
-			elapsed := time.Since(start)
+		if measureRead {
+			var elapsed time.Duration
+			if *limitread > 0 {
+				elapsed = limitRate(nr, start, *limitread)
+			} else {
+				elapsed = time.Since(start)
+			}
 			wait += elapsed
 			if *debug {
 				log.Printf("Read %d bytes in %.6f seconds\n", nr, elapsed.Seconds())
@@ -223,12 +239,17 @@ func writer(dst io.Writer, work chan *data, pool chan []byte, done chan *result)
 
 	for w := range work {
 		var start time.Time
-		if measure {
+		if measureWrite {
 			start = time.Now()
 		}
 		nw, err := dst.Write(w.buf[0:w.len])
-		if measure {
-			elapsed := time.Since(start)
+		if measureWrite {
+			var elapsed time.Duration
+			if *limitwrite > 0 {
+				elapsed = limitRate(nw, start, *limitwrite)
+			} else {
+				elapsed = time.Since(start)
+			}
 			wait += elapsed
 			if *debug {
 				log.Printf("Wrote %d bytes in %.6f seconds\n", nw, elapsed.Seconds())
@@ -249,6 +270,19 @@ func writer(dst io.Writer, work chan *data, pool chan []byte, done chan *result)
 	}
 
 	done <- &result{written, err, wait}
+}
+
+// limitRate limit operation rate by sleeping, retruning the time passed since
+// start.
+// TODO: sleep little less time, so time.Since(start) returns the expected value.
+func limitRate(n int, start time.Time, rate int) time.Duration {
+	elapsed := time.Since(start)
+	expected := time.Duration(float64(n) / float64(MB) / float64(rate) * 1e09)
+	if expected > elapsed {
+		time.Sleep(expected - elapsed)
+		elapsed = time.Since(start)
+	}
+	return elapsed
 }
 
 func alignedBuffer(size int, align int) []byte {
