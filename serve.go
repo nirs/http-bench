@@ -55,6 +55,7 @@ func main() {
 	fmt.Printf("Using direct=%v\n", *direct)
 	fmt.Printf("Using output=%v\n", *output)
 	fmt.Printf("Using stats=%v\n", *stats)
+	fmt.Printf("Using debug=%v\n", *debug)
 
 	measure = *stats || *debug
 
