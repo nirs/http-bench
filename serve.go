@@ -9,6 +9,7 @@ import (
 	"os"
 	"syscall"
 	"time"
+	"unsafe"
 )
 
 const (
@@ -17,7 +18,7 @@ const (
 )
 
 var (
-	blocksizeKB = flag.Int64(
+	blocksizeKB = flag.Int(
 		"blocksize-kb",
 		1024,
 		`block size for copying data to storage.`)
@@ -25,6 +26,10 @@ var (
 		"poolsize",
 		2,
 		`number of buffers.`)
+	direct = flag.Bool(
+		"direct",
+		false,
+		"use direct I/O")
 	output = flag.String(
 		"output",
 		"/dev/null",
@@ -37,9 +42,12 @@ var (
 
 func main() {
 	flag.Parse()
+
 	fmt.Printf("Using blocksizeKB=%d\n", *blocksizeKB)
 	fmt.Printf("Using poolsize=%d\n", *poolsize)
+	fmt.Printf("Using direct=%v\n", *direct)
 	fmt.Printf("Using output=%s\n", *output)
+
 	http.HandleFunc("/", handler)
 	log.Fatal(http.ListenAndServeTLS(":8000", "cert.pem", "key.pem", nil))
 }
@@ -83,7 +91,11 @@ func logEvent(r *http.Request, event string, format string, args ...interface{})
 }
 
 func write(r *http.Request) (n int64, err error) {
-	file, err := os.OpenFile(*output, os.O_RDWR, 0)
+	flags := os.O_RDWR
+	if *direct {
+		flags |= syscall.O_DIRECT
+	}
+	file, err := os.OpenFile(*output, flags, 0)
 	if err != nil {
 		return 0, err
 	}
@@ -143,7 +155,7 @@ func copyData(dst io.Writer, src io.Reader) (written int64, err error) {
 	done := make(chan *result)
 
 	for i := 0; i < *poolsize; i++ {
-		pool <- make([]byte, *blocksizeKB*KB)
+		pool <- alignedBuffer(*blocksizeKB*KB, 512)
 	}
 
 	go writer(dst, work, pool, done)
@@ -202,4 +214,14 @@ func writer(dst io.Writer, work chan *data, pool chan []byte, done chan *result)
 	}
 
 	done <- &result{written, err}
+}
+
+func alignedBuffer(size int, align int) []byte {
+	buf := make([]byte, size+align)
+	offset := 0
+	remainder := int(uintptr(unsafe.Pointer(&buf[0])) & uintptr(align-1))
+	if remainder != 0 {
+		offset = align - remainder
+	}
+	return buf[offset : offset+size]
 }
