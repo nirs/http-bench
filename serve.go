@@ -34,10 +34,17 @@ var (
 		"output",
 		"/dev/null",
 		`output file name; if not set output will be discarded.`)
+	stats = flag.Bool(
+		"stats",
+		false,
+		"show upload stats")
 	debug = flag.Bool(
 		"debug",
 		false,
 		`enable debug logging.`)
+
+	// Whether to measure time of every read/write operation.
+	measure = false
 )
 
 func main() {
@@ -47,6 +54,9 @@ func main() {
 	fmt.Printf("Using poolsize=%d\n", *poolsize)
 	fmt.Printf("Using direct=%v\n", *direct)
 	fmt.Printf("Using output=%s\n", *output)
+	fmt.Printf("Using stats=%v\n", *stats)
+
+	measure = *stats || *debug
 
 	http.HandleFunc("/", handler)
 	log.Fatal(http.ListenAndServeTLS(":8000", "cert.pem", "key.pem", nil))
@@ -166,12 +176,17 @@ func copyData(dst io.Writer, src io.Reader) (written int64, err error) {
 
 	for {
 		buf := <-pool
-		start := time.Now()
+		var start time.Time
+		if measure {
+			start = time.Now()
+		}
 		nr, er := io.ReadFull(src, buf)
-		if *debug {
+		if measure {
 			elapsed := time.Since(start)
 			wait += elapsed
-			log.Printf("Read %d bytes in %.6f seconds\n", nr, elapsed.Seconds())
+			if *debug {
+				log.Printf("Read %d bytes in %.6f seconds\n", nr, elapsed.Seconds())
+			}
 		}
 		if nr > 0 {
 			work <- &data{buf: buf, len: nr}
@@ -188,9 +203,9 @@ func copyData(dst io.Writer, src io.Reader) (written int64, err error) {
 	close(work)
 	r := <-done
 
-	if *debug {
+	if *stats {
 		elapsed := time.Since(start)
-		log.Printf("total=%.3f, read=%.3f, write=%.3f", elapsed.Seconds(), wait.Seconds(), r.wait.Seconds())
+		log.Printf("Stats: total=%.3f, read=%.3f, write=%.3f", elapsed.Seconds(), wait.Seconds(), r.wait.Seconds())
 	}
 
 	if err != nil {
@@ -206,12 +221,17 @@ func writer(dst io.Writer, work chan *data, pool chan []byte, done chan *result)
 	var wait time.Duration
 
 	for w := range work {
-		start := time.Now()
+		var start time.Time
+		if measure {
+			start = time.Now()
+		}
 		nw, err := dst.Write(w.buf[0:w.len])
-		if *debug {
+		if measure {
 			elapsed := time.Since(start)
 			wait += elapsed
-			log.Printf("Wrote %d bytes in %.6f seconds\n", nw, elapsed.Seconds())
+			if *debug {
+				log.Printf("Wrote %d bytes in %.6f seconds\n", nw, elapsed.Seconds())
+			}
 		}
 		if nw > 0 {
 			written += int64(nw)
