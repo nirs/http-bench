@@ -147,6 +147,7 @@ type data struct {
 type result struct {
 	written int64
 	err     error
+	wait    time.Duration
 }
 
 func copyData(dst io.Writer, src io.Reader) (written int64, err error) {
@@ -160,12 +161,17 @@ func copyData(dst io.Writer, src io.Reader) (written int64, err error) {
 
 	go writer(dst, work, pool, done)
 
+	start := time.Now()
+	var wait time.Duration
+
 	for {
 		buf := <-pool
 		start := time.Now()
 		nr, er := io.ReadFull(src, buf)
 		if *debug {
-			log.Printf("Read %d bytes in %.6f seconds\n", nr, time.Since(start).Seconds())
+			elapsed := time.Since(start)
+			wait += elapsed
+			log.Printf("Read %d bytes in %.6f seconds\n", nr, elapsed.Seconds())
 		}
 		if nr > 0 {
 			work <- &data{buf: buf, len: nr}
@@ -182,6 +188,11 @@ func copyData(dst io.Writer, src io.Reader) (written int64, err error) {
 	close(work)
 	r := <-done
 
+	if *debug {
+		elapsed := time.Since(start)
+		log.Printf("total=%.3f, read=%.3f, write=%.3f", elapsed.Seconds(), wait.Seconds(), r.wait.Seconds())
+	}
+
 	if err != nil {
 		return r.written, err
 	} else {
@@ -192,12 +203,15 @@ func copyData(dst io.Writer, src io.Reader) (written int64, err error) {
 func writer(dst io.Writer, work chan *data, pool chan []byte, done chan *result) {
 	var written int64
 	var err error
+	var wait time.Duration
 
 	for w := range work {
 		start := time.Now()
 		nw, err := dst.Write(w.buf[0:w.len])
 		if *debug {
-			log.Printf("Wrote %d bytes in %.6f seconds\n", nw, time.Since(start).Seconds())
+			elapsed := time.Since(start)
+			wait += elapsed
+			log.Printf("Wrote %d bytes in %.6f seconds\n", nw, elapsed.Seconds())
 		}
 		if nw > 0 {
 			written += int64(nw)
@@ -213,7 +227,7 @@ func writer(dst io.Writer, work chan *data, pool chan []byte, done chan *result)
 		pool <- w.buf
 	}
 
-	done <- &result{written, err}
+	done <- &result{written, err, wait}
 }
 
 func alignedBuffer(size int, align int) []byte {
