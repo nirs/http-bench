@@ -50,10 +50,10 @@ var (
 func main() {
 	flag.Parse()
 
-	fmt.Printf("Using blocksizeKB=%d\n", *blocksizeKB)
-	fmt.Printf("Using poolsize=%d\n", *poolsize)
+	fmt.Printf("Using blocksizeKB=%v\n", *blocksizeKB)
+	fmt.Printf("Using poolsize=%v\n", *poolsize)
 	fmt.Printf("Using direct=%v\n", *direct)
-	fmt.Printf("Using output=%s\n", *output)
+	fmt.Printf("Using output=%v\n", *output)
 	fmt.Printf("Using stats=%v\n", *stats)
 
 	measure = *stats || *debug
