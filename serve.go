@@ -1,12 +1,14 @@
 package main
 
 import (
+	"bytes"
 	"flag"
 	"fmt"
 	"io"
 	"log"
 	"net/http"
 	"os"
+	"sync"
 	"syscall"
 	"time"
 	"unsafe"
@@ -87,14 +89,19 @@ func handler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	start := time.Now()
+	clock := newClock()
+	clock.Start("total")
 
-	if _, err := write(r); err != nil {
+	if _, err := write(r, clock); err != nil {
 		fail(w, r, err.Error(), http.StatusBadRequest)
 		return
 	}
 
-	elapsed := time.Since(start).Seconds()
+	elapsed := clock.Stop("total").Seconds()
+
+	if *stats {
+		log.Printf("Stats: %v", clock)
+	}
 
 	logEvent(r, "FINISH", "(%.2f MiB in %.2f seconds, %.2f MiB/s)",
 		float64(r.ContentLength)/float64(MB),
@@ -112,7 +119,7 @@ func logEvent(r *http.Request, event string, format string, args ...interface{})
 	log.Printf("[%s] %s %s %q: %s", r.RemoteAddr, event, r.Method, r.URL.Path, message)
 }
 
-func write(r *http.Request) (n int64, err error) {
+func write(r *http.Request, clock *Clock) (n int64, err error) {
 	flags := os.O_RDWR
 	if *direct {
 		flags |= syscall.O_DIRECT
@@ -122,11 +129,13 @@ func write(r *http.Request) (n int64, err error) {
 		return 0, err
 	}
 
-	if n, err = copyData(file, r.Body); err != nil {
+	clock.Start("copy")
+	if n, err = copyData(file, r.Body, clock); err != nil {
 		return n, err
 	}
+	clock.Stop("copy")
 
-	start := time.Now()
+	clock.Start("sync")
 	if err = file.Sync(); err != nil {
 		if errno(err) == syscall.EINVAL {
 			// Sync to /dev/null fails with EINVAL; ignore it
@@ -136,8 +145,9 @@ func write(r *http.Request) (n int64, err error) {
 			return n, err
 		}
 	}
+	elapsed := clock.Stop("sync")
 	if *debug {
-		log.Printf("Synced in %.6f seconds\n", time.Since(start).Seconds())
+		log.Printf("Synced in %.6f seconds\n", elapsed.Seconds())
 	}
 
 	if err = file.Close(); err != nil {
@@ -169,10 +179,9 @@ type data struct {
 type result struct {
 	written int64
 	err     error
-	wait    time.Duration
 }
 
-func copyData(dst io.Writer, src io.Reader) (written int64, err error) {
+func copyData(dst io.Writer, src io.Reader, clock *Clock) (written int64, err error) {
 	pool := make(chan []byte, *poolsize)
 	work := make(chan *data, *poolsize)
 	done := make(chan *result)
@@ -181,26 +190,19 @@ func copyData(dst io.Writer, src io.Reader) (written int64, err error) {
 		pool <- alignedBuffer(*blocksizeKB*KB, 512)
 	}
 
-	go writer(dst, work, pool, done)
-
-	start := time.Now()
-	var wait time.Duration
+	go writer(dst, work, pool, done, clock)
 
 	for {
 		buf := <-pool
-		var start time.Time
 		if measureRead {
-			start = time.Now()
+			clock.Start("read")
 		}
 		nr, er := io.ReadFull(src, buf)
 		if measureRead {
-			var elapsed time.Duration
 			if *limitread > 0 {
-				elapsed = limitRate(nr, start, *limitread)
-			} else {
-				elapsed = time.Since(start)
+				limitRate(nr, clock.Elapsed("read"), *limitread)
 			}
-			wait += elapsed
+			elapsed := clock.Stop("read")
 			if *debug {
 				log.Printf("Read %d bytes in %.6f seconds\n", nr, elapsed.Seconds())
 			}
@@ -220,11 +222,6 @@ func copyData(dst io.Writer, src io.Reader) (written int64, err error) {
 	close(work)
 	r := <-done
 
-	if *stats {
-		elapsed := time.Since(start)
-		log.Printf("Stats: total=%.3f, read=%.3f, write=%.3f", elapsed.Seconds(), wait.Seconds(), r.wait.Seconds())
-	}
-
 	if err != nil {
 		return r.written, err
 	} else {
@@ -232,25 +229,20 @@ func copyData(dst io.Writer, src io.Reader) (written int64, err error) {
 	}
 }
 
-func writer(dst io.Writer, work chan *data, pool chan []byte, done chan *result) {
+func writer(dst io.Writer, work chan *data, pool chan []byte, done chan *result, clock *Clock) {
 	var written int64
 	var err error
-	var wait time.Duration
 
 	for w := range work {
-		var start time.Time
 		if measureWrite {
-			start = time.Now()
+			clock.Start("write")
 		}
 		nw, err := dst.Write(w.buf[0:w.len])
 		if measureWrite {
-			var elapsed time.Duration
 			if *limitwrite > 0 {
-				elapsed = limitRate(nw, start, *limitwrite)
-			} else {
-				elapsed = time.Since(start)
+				limitRate(nw, clock.Elapsed("write"), *limitwrite)
 			}
-			wait += elapsed
+			elapsed := clock.Stop("write")
 			if *debug {
 				log.Printf("Wrote %d bytes in %.6f seconds\n", nw, elapsed.Seconds())
 			}
@@ -269,20 +261,16 @@ func writer(dst io.Writer, work chan *data, pool chan []byte, done chan *result)
 		pool <- w.buf
 	}
 
-	done <- &result{written, err, wait}
+	done <- &result{written, err}
 }
 
-// limitRate limit operation rate by sleeping, retruning the time passed since
-// start.
+// limitRate limit operation rate by sleeping until the expected time.
 // TODO: sleep little less time, so time.Since(start) returns the expected value.
-func limitRate(n int, start time.Time, rate int) time.Duration {
-	elapsed := time.Since(start)
+func limitRate(n int, elapsed time.Duration, rate int) {
 	expected := time.Duration(float64(n) / float64(MB) / float64(rate) * 1e09)
 	if expected > elapsed {
 		time.Sleep(expected - elapsed)
-		elapsed = time.Since(start)
 	}
-	return elapsed
 }
 
 func alignedBuffer(size int, align int) []byte {
@@ -293,4 +281,96 @@ func alignedBuffer(size int, align int) []byte {
 		offset = align - remainder
 	}
 	return buf[offset : offset+size]
+}
+
+type Timer struct {
+	total   time.Duration
+	started time.Time
+	running bool
+}
+
+type Clock struct {
+	mutex  sync.Mutex
+	timers map[string]*Timer
+	names  []string
+}
+
+func newClock() *Clock {
+	return &Clock{
+		timers: map[string]*Timer{},
+		names:  []string{},
+	}
+}
+
+func (c *Clock) Start(name string) {
+	c.mutex.Lock()
+	defer c.mutex.Unlock()
+
+	t, ok := c.timers[name]
+	if !ok {
+		t = &Timer{}
+		c.timers[name] = t
+		c.names = append(c.names, name)
+	} else {
+		if t.running {
+			log.Fatalf("Timer %v is already started", name)
+		}
+	}
+
+	t.started = time.Now()
+	t.running = true
+}
+
+func (c *Clock) Elapsed(name string) time.Duration {
+	c.mutex.Lock()
+	defer c.mutex.Unlock()
+
+	t := c.get(name)
+	return time.Since(t.started)
+}
+
+func (c *Clock) Stop(name string) time.Duration {
+	c.mutex.Lock()
+	defer c.mutex.Unlock()
+
+	t := c.get(name)
+	elapsed := time.Since(t.started)
+	t.total += elapsed
+	t.running = false
+	return elapsed
+}
+
+func (c *Clock) get(name string) *Timer {
+	t, ok := c.timers[name]
+	if !ok {
+		log.Fatalf("No such timer %v", name)
+	}
+
+	if !t.running {
+		log.Fatalf("Timer %v is not running", name)
+	}
+	return t
+}
+
+func (c Clock) String() string {
+	var sep string
+	var buf bytes.Buffer
+
+	for _, name := range c.names {
+		var running string
+		var total time.Duration
+		t := c.timers[name]
+		if t.running {
+			total = t.total + time.Since(t.started)
+			running = "*"
+		} else {
+			total = t.total
+		}
+		fmt.Fprintf(&buf, "%s%s=%.3f%s", sep, name, total.Seconds(), running)
+		if sep == "" {
+			sep = ", "
+		}
+	}
+
+	return buf.String()
 }
