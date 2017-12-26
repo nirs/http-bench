@@ -207,8 +207,7 @@ func copyData(dst io.Writer, src io.Reader) (written int64, err error) {
 
 	go writer(dst, work, pool, done)
 
-	for {
-		b := <-pool
+	for b := range pool {
 		nr, er := src.Read(b.buf)
 		if nr > 0 {
 			b.len = nr
