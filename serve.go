@@ -176,20 +176,20 @@ func errno(e error) syscall.Errno {
 	}
 }
 
-type data struct {
+type Buffer struct {
 	buf []byte
 	len int
 }
 
-type result struct {
+type Result struct {
 	written int64
 	err     error
 }
 
 func copyData(dst io.Writer, src io.Reader) (written int64, err error) {
 	pool := make(chan []byte, *poolsize)
-	work := make(chan *data, *poolsize)
-	done := make(chan *result)
+	work := make(chan *Buffer, *poolsize)
+	done := make(chan *Result)
 
 	for i := 0; i < *poolsize; i++ {
 		pool <- alignedBuffer(*blocksizeKB*KB, 512)
@@ -201,7 +201,7 @@ func copyData(dst io.Writer, src io.Reader) (written int64, err error) {
 		buf := <-pool
 		nr, er := src.Read(buf)
 		if nr > 0 {
-			work <- &data{buf: buf, len: nr}
+			work <- &Buffer{buf: buf, len: nr}
 		}
 		if er != nil {
 			// Getting less bytes or no bytes means the body is consumed.
@@ -222,7 +222,7 @@ func copyData(dst io.Writer, src io.Reader) (written int64, err error) {
 	}
 }
 
-func writer(dst io.Writer, work chan *data, pool chan []byte, done chan *result) {
+func writer(dst io.Writer, work chan *Buffer, pool chan []byte, done chan *Result) {
 	var written int64
 	var err error
 
@@ -242,7 +242,7 @@ func writer(dst io.Writer, work chan *data, pool chan []byte, done chan *result)
 		pool <- w.buf
 	}
 
-	done <- &result{written, err}
+	done <- &Result{written, err}
 }
 
 func alignedBuffer(size int, align int) []byte {
