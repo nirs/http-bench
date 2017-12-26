@@ -181,27 +181,38 @@ type Buffer struct {
 	len int
 }
 
+func newBuffer(size int, align int) *Buffer {
+	buf := make([]byte, size+align)
+	offset := 0
+	remainder := int(uintptr(unsafe.Pointer(&buf[0])) & uintptr(align-1))
+	if remainder != 0 {
+		offset = align - remainder
+	}
+	return &Buffer{buf: buf[offset : offset+size]}
+}
+
 type Result struct {
 	written int64
 	err     error
 }
 
 func copyData(dst io.Writer, src io.Reader) (written int64, err error) {
-	pool := make(chan []byte, *poolsize)
+	pool := make(chan *Buffer, *poolsize)
 	work := make(chan *Buffer, *poolsize)
 	done := make(chan *Result)
 
 	for i := 0; i < *poolsize; i++ {
-		pool <- alignedBuffer(*blocksizeKB*KB, 512)
+		pool <- newBuffer(*blocksizeKB*KB, 512)
 	}
 
 	go writer(dst, work, pool, done)
 
 	for {
-		buf := <-pool
-		nr, er := src.Read(buf)
+		b := <-pool
+		nr, er := src.Read(b.buf)
 		if nr > 0 {
-			work <- &Buffer{buf: buf, len: nr}
+			b.len = nr
+			work <- b
 		}
 		if er != nil {
 			// Getting less bytes or no bytes means the body is consumed.
@@ -222,37 +233,27 @@ func copyData(dst io.Writer, src io.Reader) (written int64, err error) {
 	}
 }
 
-func writer(dst io.Writer, work chan *Buffer, pool chan []byte, done chan *Result) {
+func writer(dst io.Writer, work chan *Buffer, pool chan *Buffer, done chan *Result) {
 	var written int64
 	var err error
 
-	for w := range work {
-		nw, err := dst.Write(w.buf[0:w.len])
+	for b := range work {
+		nw, err := dst.Write(b.buf[0:b.len])
 		if nw > 0 {
 			written += int64(nw)
 		}
 		if err != nil {
 			break
 		}
-		if w.len != nw {
+		if b.len != nw {
 			err = io.ErrShortWrite
 			break
 		}
-
-		pool <- w.buf
+		b.len = 0
+		pool <- b
 	}
 
 	done <- &Result{written, err}
-}
-
-func alignedBuffer(size int, align int) []byte {
-	buf := make([]byte, size+align)
-	offset := 0
-	remainder := int(uintptr(unsafe.Pointer(&buf[0])) & uintptr(align-1))
-	if remainder != 0 {
-		offset = align - remainder
-	}
-	return buf[offset : offset+size]
 }
 
 type Reader struct {
