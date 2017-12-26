@@ -197,7 +197,7 @@ type Result struct {
 	err     error
 }
 
-func copyData(dst io.Writer, src io.Reader) (written int64, err error) {
+func copyData(dst *Writer, src *Reader) (written int64, err error) {
 	pool := make(chan *Buffer, *poolsize)
 	work := make(chan *Buffer, *poolsize)
 	done := make(chan *Result)
@@ -209,15 +209,13 @@ func copyData(dst io.Writer, src io.Reader) (written int64, err error) {
 	go writer(dst, work, pool, done)
 
 	for b := range pool {
-		nr, er := src.Read(b.buf)
-		if nr > 0 {
-			b.len = nr
+		n, er := src.Read(b)
+		if n > 0 {
 			work <- b
 		}
 		if er != nil {
-			// Getting less bytes or no bytes means the body is consumed.
 			if er != io.EOF && er != io.ErrUnexpectedEOF {
-				err = er
+				err = er // Unexpected error
 			}
 			break
 		}
@@ -233,23 +231,18 @@ func copyData(dst io.Writer, src io.Reader) (written int64, err error) {
 	}
 }
 
-func writer(dst io.Writer, work chan *Buffer, pool chan *Buffer, done chan *Result) {
+func writer(dst *Writer, work chan *Buffer, pool chan *Buffer, done chan *Result) {
 	var written int64
 	var err error
 
 	for b := range work {
-		nw, err := dst.Write(b.buf[0:b.len])
-		if nw > 0 {
-			written += int64(nw)
+		n, err := dst.Write(b)
+		if n > 0 {
+			written += int64(n)
 		}
 		if err != nil {
 			break
 		}
-		if b.len != nw {
-			err = io.ErrShortWrite
-			break
-		}
-		b.len = 0
 		pool <- b
 	}
 
@@ -266,11 +259,12 @@ type Reader struct {
 	limit   int
 }
 
-func (r *Reader) Read(buf []byte) (n int, err error) {
+func (r *Reader) Read(b *Buffer) (n int, err error) {
 	if r.measure {
 		r.clock.Start("read")
 	}
-	n, err = io.ReadFull(r.r, buf)
+	n, err = io.ReadFull(r.r, b.buf)
+	b.len = n
 	if r.measure {
 		if r.limit > 0 {
 			limitRate(n, r.clock.Elapsed("read"), r.limit)
@@ -290,11 +284,11 @@ type Writer struct {
 	limit   int
 }
 
-func (w *Writer) Write(buf []byte) (n int, err error) {
+func (w *Writer) Write(b *Buffer) (n int, err error) {
 	if w.measure {
 		w.clock.Start("write")
 	}
-	n, err = w.w.Write(buf)
+	n, err = w.w.Write(b.buf[:b.len])
 	if w.measure {
 		if w.limit > 0 {
 			limitRate(n, w.clock.Elapsed("write"), w.limit)
