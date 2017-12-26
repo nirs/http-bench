@@ -141,7 +141,6 @@ func write(r *http.Request, clock *Clock) (n int64, err error) {
 			// Sync to /dev/null fails with EINVAL; ignore it
 			err = nil
 		} else {
-			fmt.Printf("%T %#v\n", err, err)
 			return n, err
 		}
 	}
