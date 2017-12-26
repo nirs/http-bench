@@ -128,6 +128,8 @@ func write(r *http.Request, clock *Clock) (n int64, err error) {
 	if err != nil {
 		return 0, err
 	}
+	// Should be safe to ignore error if Sync() succeeded.
+	defer file.Close()
 
 	clock.Start("copy")
 	if n, err = copyData(file, r.Body, clock); err != nil {
@@ -147,10 +149,6 @@ func write(r *http.Request, clock *Clock) (n int64, err error) {
 	elapsed := clock.Stop("sync")
 	if *debug {
 		log.Printf("Synced in %.6f seconds\n", elapsed.Seconds())
-	}
-
-	if err = file.Close(); err != nil {
-		return n, err
 	}
 
 	return n, nil
