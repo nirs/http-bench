@@ -192,17 +192,30 @@ func newBuffer(size int, align int) *Buffer {
 	return &Buffer{buf: buf[offset : offset+size]}
 }
 
-func copyData(dst *Writer, src *Reader) (written int64, err error) {
+func copyData(dst *Writer, src *Reader) (int64, error) {
 	pool := make(chan *Buffer, *poolsize)
 	work := make(chan *Buffer, *poolsize)
-	done := make(chan bool)
 
 	for i := 0; i < *poolsize; i++ {
 		pool <- newBuffer(*blocksizeKB*KB, 512)
 	}
 
-	go writer(dst, work, pool, done)
+	var wg sync.WaitGroup
+	wg.Add(2)
 
+	go reader(src, pool, work, &wg)
+	go writer(dst, work, pool, &wg)
+
+	wg.Wait()
+
+	if src.err != nil && src.err != io.EOF && src.err != io.ErrUnexpectedEOF {
+		return src.count, src.err
+	} else {
+		return dst.count, dst.err
+	}
+}
+
+func reader(src *Reader, pool chan *Buffer, work chan *Buffer, wg *sync.WaitGroup) {
 	for b := range pool {
 		n, err := src.Read(b)
 		if n > 0 {
@@ -212,18 +225,11 @@ func copyData(dst *Writer, src *Reader) (written int64, err error) {
 			break
 		}
 	}
-
 	close(work)
-	<-done
-
-	if err != io.EOF && err != io.ErrUnexpectedEOF {
-		return src.count, err
-	} else {
-		return dst.count, dst.err
-	}
+	wg.Done()
 }
 
-func writer(dst *Writer, work chan *Buffer, pool chan *Buffer, done chan bool) {
+func writer(dst *Writer, work chan *Buffer, pool chan *Buffer, wg *sync.WaitGroup) {
 	for b := range work {
 		_, err := dst.Write(b)
 		if err != nil {
@@ -232,7 +238,7 @@ func writer(dst *Writer, work chan *Buffer, pool chan *Buffer, done chan bool) {
 		pool <- b
 	}
 	close(pool)
-	done <- true
+	wg.Done()
 }
 
 type Reader struct {
