@@ -52,9 +52,6 @@ var (
 		"debug",
 		false,
 		`enable debug logging.`)
-
-	measureRead  = false
-	measureWrite = false
 )
 
 func main() {
@@ -68,9 +65,6 @@ func main() {
 	fmt.Printf("Using output=%v\n", *output)
 	fmt.Printf("Using stats=%v\n", *stats)
 	fmt.Printf("Using debug=%v\n", *debug)
-
-	measureRead = *stats || *debug || (*limitread != 0)
-	measureWrite = *stats || *debug || (*limitwrite != 0)
 
 	http.HandleFunc("/", handler)
 	log.Fatal(http.ListenAndServeTLS(":8000", "cert.pem", "key.pem", nil))
@@ -131,8 +125,22 @@ func write(r *http.Request, clock *Clock) (n int64, err error) {
 	// Should be safe to ignore error if Sync() succeeded.
 	defer file.Close()
 
+	src := &Reader{
+		r:       r.Body,
+		clock:   clock,
+		measure: *stats || *debug || (*limitread != 0),
+		limit:   *limitread,
+	}
+
+	dst := &Writer{
+		w:       file,
+		clock:   clock,
+		measure: *stats || *debug || (*limitwrite != 0),
+		limit:   *limitwrite,
+	}
+
 	clock.Start("copy")
-	if n, err = copyData(file, r.Body, clock); err != nil {
+	if n, err = copyData(dst, src); err != nil {
 		return n, err
 	}
 	clock.Stop("copy")
@@ -178,7 +186,7 @@ type result struct {
 	err     error
 }
 
-func copyData(dst io.Writer, src io.Reader, clock *Clock) (written int64, err error) {
+func copyData(dst io.Writer, src io.Reader) (written int64, err error) {
 	pool := make(chan []byte, *poolsize)
 	work := make(chan *data, *poolsize)
 	done := make(chan *result)
@@ -187,23 +195,11 @@ func copyData(dst io.Writer, src io.Reader, clock *Clock) (written int64, err er
 		pool <- alignedBuffer(*blocksizeKB*KB, 512)
 	}
 
-	go writer(dst, work, pool, done, clock)
+	go writer(dst, work, pool, done)
 
 	for {
 		buf := <-pool
-		if measureRead {
-			clock.Start("read")
-		}
-		nr, er := io.ReadFull(src, buf)
-		if measureRead {
-			if *limitread > 0 {
-				limitRate(nr, clock.Elapsed("read"), *limitread)
-			}
-			elapsed := clock.Stop("read")
-			if *debug {
-				log.Printf("Read %d bytes in %.6f seconds\n", nr, elapsed.Seconds())
-			}
-		}
+		nr, er := src.Read(buf)
 		if nr > 0 {
 			work <- &data{buf: buf, len: nr}
 		}
@@ -226,24 +222,12 @@ func copyData(dst io.Writer, src io.Reader, clock *Clock) (written int64, err er
 	}
 }
 
-func writer(dst io.Writer, work chan *data, pool chan []byte, done chan *result, clock *Clock) {
+func writer(dst io.Writer, work chan *data, pool chan []byte, done chan *result) {
 	var written int64
 	var err error
 
 	for w := range work {
-		if measureWrite {
-			clock.Start("write")
-		}
 		nw, err := dst.Write(w.buf[0:w.len])
-		if measureWrite {
-			if *limitwrite > 0 {
-				limitRate(nw, clock.Elapsed("write"), *limitwrite)
-			}
-			elapsed := clock.Stop("write")
-			if *debug {
-				log.Printf("Wrote %d bytes in %.6f seconds\n", nw, elapsed.Seconds())
-			}
-		}
 		if nw > 0 {
 			written += int64(nw)
 		}
@@ -261,15 +245,6 @@ func writer(dst io.Writer, work chan *data, pool chan []byte, done chan *result,
 	done <- &result{written, err}
 }
 
-// limitRate limit operation rate by sleeping until the expected time.
-// TODO: sleep little less time, so time.Since(start) returns the expected value.
-func limitRate(n int, elapsed time.Duration, rate int) {
-	expected := time.Duration(float64(n) / float64(MB) / float64(rate) * 1e09)
-	if expected > elapsed {
-		time.Sleep(expected - elapsed)
-	}
-}
-
 func alignedBuffer(size int, align int) []byte {
 	buf := make([]byte, size+align)
 	offset := 0
@@ -278,6 +253,63 @@ func alignedBuffer(size int, align int) []byte {
 		offset = align - remainder
 	}
 	return buf[offset : offset+size]
+}
+
+type Reader struct {
+	r       io.Reader
+	clock   *Clock
+	measure bool
+	limit   int
+}
+
+func (r *Reader) Read(buf []byte) (n int, err error) {
+	if r.measure {
+		r.clock.Start("read")
+	}
+	n, err = io.ReadFull(r.r, buf)
+	if r.measure {
+		if r.limit > 0 {
+			limitRate(n, r.clock.Elapsed("read"), r.limit)
+		}
+		elapsed := r.clock.Stop("read")
+		if *debug {
+			log.Printf("Read %d bytes in %.6f seconds\n", n, elapsed.Seconds())
+		}
+	}
+	return
+}
+
+type Writer struct {
+	w       io.Writer
+	clock   *Clock
+	measure bool
+	limit   int
+}
+
+func (w *Writer) Write(buf []byte) (n int, err error) {
+	if w.measure {
+		w.clock.Start("write")
+	}
+	n, err = w.w.Write(buf)
+	if w.measure {
+		if w.limit > 0 {
+			limitRate(n, w.clock.Elapsed("write"), w.limit)
+		}
+		elapsed := w.clock.Stop("write")
+		if *debug {
+			log.Printf("Wrote %d bytes in %.6f seconds\n", n, elapsed.Seconds())
+		}
+	}
+	return
+}
+
+// limitRate limit operation rate by sleeping until the expected time.
+// TODO: sleep little less time, so time.Since(start) returns the expected value.
+func limitRate(n int, elapsed time.Duration, rate int) {
+	expected := time.Duration(float64(n) / float64(MB) / float64(rate) * 1e09)
+	if expected > elapsed {
+		time.Sleep(expected - elapsed)
+	}
 }
 
 type Timer struct {
