@@ -57,14 +57,15 @@ var (
 func main() {
 	flag.Parse()
 
-	fmt.Printf("Using blocksizeKB=%v\n", *blocksizeKB)
-	fmt.Printf("Using poolsize=%v\n", *poolsize)
-	fmt.Printf("Using limitread=%v\n", *limitread)
-	fmt.Printf("Using limitwrite=%v\n", *limitwrite)
-	fmt.Printf("Using direct=%v\n", *direct)
-	fmt.Printf("Using output=%v\n", *output)
-	fmt.Printf("Using stats=%v\n", *stats)
-	fmt.Printf("Using debug=%v\n", *debug)
+	if *debug {
+		fmt.Printf("Using blocksizeKB=%v\n", *blocksizeKB)
+		fmt.Printf("Using poolsize=%v\n", *poolsize)
+		fmt.Printf("Using limitread=%v\n", *limitread)
+		fmt.Printf("Using limitwrite=%v\n", *limitwrite)
+		fmt.Printf("Using direct=%v\n", *direct)
+		fmt.Printf("Using output=%v\n", *output)
+		fmt.Printf("Using stats=%v\n", *stats)
+	}
 
 	http.HandleFunc("/", handler)
 	log.Fatal(http.ListenAndServeTLS(":8000", "cert.pem", "key.pem", nil))
