@@ -192,15 +192,10 @@ func newBuffer(size int, align int) *Buffer {
 	return &Buffer{buf: buf[offset : offset+size]}
 }
 
-type Result struct {
-	written int64
-	err     error
-}
-
 func copyData(dst *Writer, src *Reader) (written int64, err error) {
 	pool := make(chan *Buffer, *poolsize)
 	work := make(chan *Buffer, *poolsize)
-	done := make(chan *Result)
+	done := make(chan bool)
 
 	for i := 0; i < *poolsize; i++ {
 		pool <- newBuffer(*blocksizeKB*KB, 512)
@@ -209,47 +204,35 @@ func copyData(dst *Writer, src *Reader) (written int64, err error) {
 	go writer(dst, work, pool, done)
 
 	for b := range pool {
-		n, er := src.Read(b)
+		n, err := src.Read(b)
 		if n > 0 {
 			work <- b
 		}
-		if er != nil {
-			if er != io.EOF && er != io.ErrUnexpectedEOF {
-				err = er // Unexpected error
-			}
+		if err != nil {
 			break
 		}
 	}
 
 	close(work)
-	r := <-done
+	<-done
 
-	if err != nil {
-		return r.written, err
+	if err != io.EOF && err != io.ErrUnexpectedEOF {
+		return src.count, err
 	} else {
-		return r.written, r.err
+		return dst.count, dst.err
 	}
 }
 
-func writer(dst *Writer, work chan *Buffer, pool chan *Buffer, done chan *Result) {
-	var written int64
-	var err error
-
+func writer(dst *Writer, work chan *Buffer, pool chan *Buffer, done chan bool) {
 	for b := range work {
-		n, err := dst.Write(b)
-		if n > 0 {
-			written += int64(n)
-		}
+		_, err := dst.Write(b)
 		if err != nil {
 			break
 		}
 		pool <- b
 	}
-
-	// Singal the reader that we are done on errors.
 	close(pool)
-
-	done <- &Result{written, err}
+	done <- true
 }
 
 type Reader struct {
@@ -257,6 +240,8 @@ type Reader struct {
 	clock   *Clock
 	measure bool
 	limit   int
+	count   int64
+	err     error
 }
 
 func (r *Reader) Read(b *Buffer) (n int, err error) {
@@ -274,6 +259,10 @@ func (r *Reader) Read(b *Buffer) (n int, err error) {
 			log.Printf("Read %d bytes in %.6f seconds\n", n, elapsed.Seconds())
 		}
 	}
+	if n > 0 {
+		r.count += int64(n)
+	}
+	r.err = err
 	return
 }
 
@@ -282,6 +271,8 @@ type Writer struct {
 	clock   *Clock
 	measure bool
 	limit   int
+	count   int64
+	err     error
 }
 
 func (w *Writer) Write(b *Buffer) (n int, err error) {
@@ -298,6 +289,10 @@ func (w *Writer) Write(b *Buffer) (n int, err error) {
 			log.Printf("Wrote %d bytes in %.6f seconds\n", n, elapsed.Seconds())
 		}
 	}
+	if n > 0 {
+		w.count += int64(n)
+	}
+	w.err = err
 	return
 }
 
