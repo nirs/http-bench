@@ -252,6 +252,9 @@ func writer(dst io.Writer, work chan *Buffer, pool chan *Buffer, done chan *Resu
 		pool <- b
 	}
 
+	// Singal the reader that we are done on errors.
+	close(pool)
+
 	done <- &Result{written, err}
 }
 
