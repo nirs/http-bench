@@ -128,6 +128,7 @@ func write(r *http.Request, clock *Clock) (n int64, err error) {
 	if err != nil {
 		return 0, err
 	}
+	defer file.Close()
 
 	clock.Start("copy")
 	if n, err = copyData(file, r.Body, clock); err != nil {
@@ -141,17 +142,12 @@ func write(r *http.Request, clock *Clock) (n int64, err error) {
 			// Sync to /dev/null fails with EINVAL; ignore it
 			err = nil
 		} else {
-			fmt.Printf("%T %#v\n", err, err)
 			return n, err
 		}
 	}
 	elapsed := clock.Stop("sync")
 	if *debug {
 		log.Printf("Synced in %.6f seconds\n", elapsed.Seconds())
-	}
-
-	if err = file.Close(); err != nil {
-		return n, err
 	}
 
 	return n, nil
@@ -181,7 +177,7 @@ type result struct {
 	err     error
 }
 
-func copyData(dst io.Writer, src io.Reader, clock *Clock) (written int64, err error) {
+func copyData(dst *os.File, src io.Reader, clock *Clock) (written int64, err error) {
 	pool := make(chan []byte, *poolsize)
 	work := make(chan *data, *poolsize)
 	done := make(chan *result)
@@ -229,7 +225,7 @@ func copyData(dst io.Writer, src io.Reader, clock *Clock) (written int64, err er
 	}
 }
 
-func writer(dst io.Writer, work chan *data, pool chan []byte, done chan *result, clock *Clock) {
+func writer(dst *os.File, work chan *data, pool chan []byte, done chan *result, clock *Clock) {
 	var written int64
 	var err error
 
@@ -256,6 +252,12 @@ func writer(dst io.Writer, work chan *data, pool chan []byte, done chan *result,
 		if w.len != nw {
 			err = io.ErrShortWrite
 			break
+		}
+
+		if !*direct {
+			if err = Fadvise64(int(dst.Fd()), written-int64(nw), int64(nw), FADVISE_DONTNEED); err != nil {
+				break
+			}
 		}
 
 		pool <- w.buf
@@ -373,4 +375,25 @@ func (c Clock) String() string {
 	}
 
 	return buf.String()
+}
+
+const (
+	FADVISE_NORMAL     = 0x0
+	FADVISE_RANDOM     = 0x1
+	FADVISE_SEQUENTIAL = 0x2
+	FADVISE_WILLNEED   = 0x3
+	FADVISE_DONTNEED   = 0x4
+	FADVISE_NOREUSE    = 0x5
+)
+
+func Fadvise64(fd int, offset int64, length int64, advice int) error {
+	_, _, errno := syscall.Syscall6(syscall.SYS_FADVISE64,
+		uintptr(fd),
+		uintptr(offset),
+		uintptr(length),
+		uintptr(advice), 0, 0)
+	if errno != 0 {
+		return errno
+	}
+	return nil
 }
