@@ -95,7 +95,7 @@ func handler(w http.ResponseWriter, r *http.Request) {
 	elapsed := clock.Stop("total").Seconds()
 
 	if *stats {
-		log.Printf("Stats: %v", clock)
+		logEvent(r, "INFO", "%v", clock)
 	}
 
 	logEvent(r, "FINISH", "(%.2f MiB in %.2f seconds, %.2f MiB/s)",
