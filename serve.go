@@ -157,7 +157,7 @@ func write(r *http.Request, clock *Clock) (n int64, err error) {
 	}
 	elapsed := clock.Stop("sync")
 	if *debug {
-		log.Printf("Synced in %.6f seconds\n", elapsed.Seconds())
+		log.Printf("Synced in %.6f seconds", elapsed.Seconds())
 	}
 
 	return n, nil
@@ -262,7 +262,7 @@ func (r *Reader) Read(b *Buffer) (n int, err error) {
 		}
 		elapsed := r.clock.Stop("read")
 		if *debug {
-			log.Printf("Read %d bytes in %.6f seconds\n", n, elapsed.Seconds())
+			log.Printf("Read %d bytes in %.6f seconds", n, elapsed.Seconds())
 		}
 	}
 	if n > 0 {
@@ -295,7 +295,7 @@ func (w *Writer) Write(b *Buffer) (n int, err error) {
 		}
 		elapsed := w.clock.Stop("write")
 		if *debug {
-			log.Printf("Wrote %d bytes in %.6f seconds\n", n, elapsed.Seconds())
+			log.Printf("Wrote %d bytes in %.6f seconds", n, elapsed.Seconds())
 		}
 	}
 	if n > 0 {
