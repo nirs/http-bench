@@ -208,7 +208,7 @@ func copyData(dst *Writer, src *Reader) (int64, error) {
 
 	wg.Wait()
 
-	if src.err != nil && src.err != io.EOF && src.err != io.ErrUnexpectedEOF {
+	if src.err != io.EOF {
 		return src.count, src.err
 	} else {
 		return dst.count, dst.err
@@ -267,6 +267,9 @@ func (r *Reader) Read(b *Buffer) (n int, err error) {
 	}
 	if n > 0 {
 		r.count += int64(n)
+	}
+	if err == io.ErrUnexpectedEOF {
+		err = io.EOF
 	}
 	r.err = err
 	return
