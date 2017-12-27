@@ -387,6 +387,9 @@ func (c *Clock) String() string {
 	var sep string
 	var buf bytes.Buffer
 
+	c.mutex.Lock()
+	defer c.mutex.Unlock()
+
 	for _, name := range c.names {
 		var running string
 		var total time.Duration
