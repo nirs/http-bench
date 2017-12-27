@@ -72,7 +72,7 @@ func main() {
 }
 
 func handler(w http.ResponseWriter, r *http.Request) {
-	logEvent(r, "START", "(%.2f MiB)", float64(r.ContentLength)/float64(MB))
+	logEvent(r, "START", "")
 
 	if r.Method != "PUT" {
 		fail(w, r, "Unsupported method", http.StatusMethodNotAllowed)
@@ -98,7 +98,7 @@ func handler(w http.ResponseWriter, r *http.Request) {
 		logEvent(r, "INFO", "%v", clock)
 	}
 
-	logEvent(r, "FINISH", "(%.2f MiB in %.2f seconds, %.2f MiB/s)",
+	logEvent(r, "FINISH", "%.2f MiB in %.2f seconds, %.2f MiB/s",
 		float64(r.ContentLength)/float64(MB),
 		elapsed,
 		float64(r.ContentLength)/float64(MB)/elapsed)
@@ -111,7 +111,7 @@ func fail(w http.ResponseWriter, r *http.Request, msg string, code int) {
 
 func logEvent(r *http.Request, event string, format string, args ...interface{}) {
 	message := fmt.Sprintf(format, args...)
-	log.Printf("[%s] %s %s %q: %s", r.RemoteAddr, event, r.Method, r.URL.Path, message)
+	log.Printf("[%s] %-7s %s %q %s", r.RemoteAddr, event, r.Method, r.URL.Path, message)
 }
 
 func write(r *http.Request, clock *Clock) (n int64, err error) {
