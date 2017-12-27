@@ -383,7 +383,7 @@ func (c *Clock) get(name string) *Timer {
 	return t
 }
 
-func (c Clock) String() string {
+func (c *Clock) String() string {
 	var sep string
 	var buf bytes.Buffer
 
