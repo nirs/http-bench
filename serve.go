@@ -146,6 +146,11 @@ func write(r *http.Request, clock *Clock) (n int64, err error) {
 	}
 	clock.Stop("copy")
 
+	if n != r.ContentLength {
+		return n, fmt.Errorf("Incomplete write, copied %v bytes, expected %v bytes",
+			n, r.ContentLength)
+	}
+
 	clock.Start("sync")
 	if err = file.Sync(); err != nil {
 		if errno(err) == syscall.EINVAL {
