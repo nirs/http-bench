@@ -1,10 +1,10 @@
 all: upload-go serve
 
-upload-go: upload-go.go
-	go build $<
+upload-go: src/upload-go.go
+	GOPATH=$(PWD) go build $<
 
-serve: serve.go
-	go build $<
+serve: src/serve.go
+	GOPATH=$(PWD) go build $<
 
 test:
 	tox

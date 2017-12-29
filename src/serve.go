@@ -11,7 +11,8 @@ import (
 	"sync"
 	"syscall"
 	"time"
-	"unsafe"
+
+	"cio"
 )
 
 const (
@@ -24,10 +25,6 @@ var (
 		"blocksize-kb",
 		1024,
 		`block size for copying data to storage.`)
-	poolsize = flag.Int(
-		"poolsize",
-		2,
-		`number of buffers.`)
 	limitread = flag.Int(
 		"limit-read-mbps",
 		0,
@@ -59,7 +56,6 @@ func main() {
 
 	if *debug {
 		fmt.Printf("Using blocksizeKB=%v\n", *blocksizeKB)
-		fmt.Printf("Using poolsize=%v\n", *poolsize)
 		fmt.Printf("Using limitread=%v\n", *limitread)
 		fmt.Printf("Using limitwrite=%v\n", *limitwrite)
 		fmt.Printf("Using direct=%v\n", *direct)
@@ -141,7 +137,7 @@ func write(r *http.Request, clock *Clock) (n int64, err error) {
 	}
 
 	clock.Start("copy")
-	if n, err = copyData(dst, src); err != nil {
+	if n, err = cio.Copy(dst, src, *blocksizeKB*KB); err != nil {
 		return n, err
 	}
 	clock.Stop("copy")
@@ -182,85 +178,18 @@ func errno(e error) syscall.Errno {
 	}
 }
 
-type Buffer struct {
-	buf []byte
-	len int
-}
-
-func newBuffer(size int, align int) *Buffer {
-	buf := make([]byte, size+align)
-	offset := 0
-	remainder := int(uintptr(unsafe.Pointer(&buf[0])) & uintptr(align-1))
-	if remainder != 0 {
-		offset = align - remainder
-	}
-	return &Buffer{buf: buf[offset : offset+size]}
-}
-
-func copyData(dst *Writer, src *Reader) (int64, error) {
-	pool := make(chan *Buffer, *poolsize)
-	work := make(chan *Buffer, *poolsize)
-
-	for i := 0; i < *poolsize; i++ {
-		pool <- newBuffer(*blocksizeKB*KB, 512)
-	}
-
-	var wg sync.WaitGroup
-	wg.Add(2)
-
-	go reader(src, pool, work, &wg)
-	go writer(dst, work, pool, &wg)
-
-	wg.Wait()
-
-	if src.err != io.EOF {
-		return src.count, src.err
-	} else {
-		return dst.count, dst.err
-	}
-}
-
-func reader(src *Reader, pool chan *Buffer, work chan *Buffer, wg *sync.WaitGroup) {
-	for b := range pool {
-		n, err := src.Read(b)
-		if n > 0 {
-			work <- b
-		}
-		if err != nil {
-			break
-		}
-	}
-	close(work)
-	wg.Done()
-}
-
-func writer(dst *Writer, work chan *Buffer, pool chan *Buffer, wg *sync.WaitGroup) {
-	for b := range work {
-		_, err := dst.Write(b)
-		if err != nil {
-			break
-		}
-		pool <- b
-	}
-	close(pool)
-	wg.Done()
-}
-
 type Reader struct {
 	r       io.Reader
 	clock   *Clock
 	measure bool
 	limit   int
-	count   int64
-	err     error
 }
 
-func (r *Reader) Read(b *Buffer) (n int, err error) {
+func (r *Reader) Read(buf []byte) (n int, err error) {
 	if r.measure {
 		r.clock.Start("read")
 	}
-	n, err = io.ReadFull(r.r, b.buf)
-	b.len = n
+	n, err = io.ReadFull(r.r, buf)
 	if r.measure {
 		if r.limit > 0 {
 			limitRate(n, r.clock.Elapsed("read"), r.limit)
@@ -270,13 +199,9 @@ func (r *Reader) Read(b *Buffer) (n int, err error) {
 			log.Printf("Read %d bytes in %.6f seconds", n, elapsed.Seconds())
 		}
 	}
-	if n > 0 {
-		r.count += int64(n)
-	}
 	if err == io.ErrUnexpectedEOF {
 		err = io.EOF
 	}
-	r.err = err
 	return
 }
 
@@ -285,15 +210,13 @@ type Writer struct {
 	clock   *Clock
 	measure bool
 	limit   int
-	count   int64
-	err     error
 }
 
-func (w *Writer) Write(b *Buffer) (n int, err error) {
+func (w *Writer) Write(buf []byte) (n int, err error) {
 	if w.measure {
 		w.clock.Start("write")
 	}
-	n, err = w.w.Write(b.buf[:b.len])
+	n, err = w.w.Write(buf)
 	if w.measure {
 		if w.limit > 0 {
 			limitRate(n, w.clock.Elapsed("write"), w.limit)
@@ -303,10 +226,6 @@ func (w *Writer) Write(b *Buffer) (n int, err error) {
 			log.Printf("Wrote %d bytes in %.6f seconds", n, elapsed.Seconds())
 		}
 	}
-	if n > 0 {
-		w.count += int64(n)
-	}
-	w.err = err
 	return
 }
 
