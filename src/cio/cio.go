@@ -6,6 +6,8 @@ import (
 	"unsafe"
 )
 
+const bufcount = 2
+
 // Copy copies from src to dst until either EOF is reached
 // on src or an error occurs. It returns the number of bytes
 // copied and the first error encountered while copying, if any.
@@ -18,10 +20,10 @@ import (
 // the copy are alinged to 512 bytes, and the data is read from the
 // reader and written to the writer concurrently.
 func Copy(dst io.Writer, src io.Reader, bufsize int) (written int64, err error) {
-	pool := make(chan *buffer, 2)
-	work := make(chan *buffer, 2)
+	pool := make(chan *buffer, bufcount)
+	work := make(chan *buffer, bufcount)
 
-	for i := 0; i < 2; i++ {
+	for i := 0; i < bufcount; i++ {
 		pool <- newBuffer(bufsize, 512)
 	}
 
