@@ -1,10 +1,12 @@
 all: upload-go serve
 
-upload-go: src/upload-go.go
-	GOPATH=$(PWD) go build $<
+.PHONY: upload-go serve
 
-serve: src/serve.go
-	GOPATH=$(PWD) go build $<
+upload-go:
+	GOPATH=$(PWD) go build src/upload-go.go
+
+serve:
+	GOPATH=$(PWD) go build src/serve.go
 
 test:
 	tox
