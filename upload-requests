@@ -3,11 +3,15 @@
 Benchmrk for uploading files using requests.
 """
 
+import io
 import sys
 
 import requests
 
 from six.moves.urllib.parse import urlunparse
+
+import urllib3
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 import bench
 import util
@@ -31,13 +35,22 @@ class RequestsIterator(util.BlockIterator):
             return self._reader.read(n)
 
 
-with bench.run() as args:
-    with open(args.file, "rb") as f:
-        f = util.LimitedReader(f, args.size)
-        f = RequestsIterator(f, args.blocksize, args.size)
-        url = urlunparse(args.url)
+def upload(filename, offset, size, url, blocksize):
+    with io.open(filename, "rb") as f:
+        f.seek(offset)
+        f = util.LimitedReader(f, size)
+        f = RequestsIterator(f, blocksize, size)
+        url = urlunparse(url)
 
+        headers = {
+            "Content-Length": str(size),
+            "Content-Range": "bytes %d-%d/*" % (offset, offset + size - 1),
+        }
         # verify=False to disable certificate verification.
-        resp = requests.put(url, data=f, verify=False)
+        resp = requests.put(url, data=f, headers=headers, verify=False)
 
     assert resp.status_code == 200
+
+
+with bench.run() as args:
+    util.parallel(upload, args)

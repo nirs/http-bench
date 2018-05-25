@@ -2,6 +2,57 @@
 Helpers for uploading with various python versions.
 """
 
+import threading
+
+
+def parallel(func, args):
+    """
+    Parallelize upload, using multiple workers, each uploading a range of the
+    file.
+
+    Arguments:
+        func    upload function using this signature:
+                func(filename, offset, size, url, blocksize)
+        args    parsed benchmark arguments.
+    """
+    threads = []
+    for i, (offset, size) in enumerate(
+            ranges(args.size, args.workers, args.blocksize)):
+        t = threading.Thread(
+            target=func,
+            args=(args.file, offset, size, args.url, args.blocksize),
+            name="upload/%d" % i)
+        t.daemon = True
+        threads.append(t)
+        t.start()
+
+    for t in threads:
+        t.join()
+
+
+def ranges(size, count, min_size):
+    """
+    Generate count ranges tuples (offset, size), covering specified size.
+
+    Ranges are aligned to min_size. If size is less then min_size, there will
+    be only one range.
+
+    If size is not a power of min_size, the last range will be smaller.
+    """
+    chunk = round_up(size // count, min_size)
+    pos = 0
+    while pos < size:
+        yield pos, min(size - pos, chunk)
+        pos += chunk
+
+
+def round_up(n, size):
+    """
+    Round an integer to next power of size. Size must be power of 2.
+    """
+    assert size & (size - 1) == 0, "size is not power of 2"
+    return ((n - 1) | (size - 1)) + 1
+
 
 class LimitedReader(object):
     """

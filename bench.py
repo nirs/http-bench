@@ -52,6 +52,13 @@ def parse_args():
         default=8192,
         help="block size in KiB (default 8 KiB)")
     parser.add_argument(
+        "--workers",
+        "-w",
+        dest="workers",
+        type=int,
+        default=1,
+        help="nummber of workers (default 1)")
+    parser.add_argument(
         "file",
         help=("file to upload. Can be a file, a block device like /dev/sdb, "
               "or a character special file like /dev/zero."))
