@@ -24,7 +24,6 @@ install:
 env:
   global:
   - UPLOAD_SIZE_MB=32
-  - MAX_WORKERS=2
 
 script:
   - make

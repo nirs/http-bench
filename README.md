@@ -41,11 +41,6 @@ a smaller upload size using environment variable:
 
     UPLOAD_SIZE_MB=1 make test
 
-The parallel uploads tests start one worker per cpu. If you want to
-limit the number of workers, use:
-
-    MAX_WORKERS=2 make test
-
 To run with specific python version:
 
     $ tox -e py27
