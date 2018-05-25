@@ -8,6 +8,8 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"regexp"
+	"strconv"
 	"sync"
 	"syscall"
 	"time"
@@ -49,6 +51,8 @@ var (
 		"debug",
 		false,
 		`enable debug logging.`)
+
+	contentRangeRegexp = regexp.MustCompile(`bytes ([0-9]+)-([0-9]+)/([0-9]+|\\*)`)
 )
 
 func main() {
@@ -68,7 +72,8 @@ func main() {
 }
 
 func handler(w http.ResponseWriter, r *http.Request) {
-	logEvent(r, "START", "")
+	clock := newClock()
+	clock.Start("total")
 
 	if r.Method != "PUT" {
 		fail(w, r, "Unsupported method", http.StatusMethodNotAllowed)
@@ -80,10 +85,15 @@ func handler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	clock := newClock()
-	clock.Start("total")
+	offset, err := contentRangeStart(r)
+	if err != nil {
+		fail(w, r, err.Error(), http.StatusBadRequest)
+		return
+	}
 
-	if _, err := write(r, clock); err != nil {
+	logEvent(r, "START", "offset=%v, size=%v", offset, r.ContentLength)
+
+	if _, err := write(r, offset, clock); err != nil {
 		fail(w, r, err.Error(), http.StatusBadRequest)
 		return
 	}
@@ -110,7 +120,7 @@ func logEvent(r *http.Request, event string, format string, args ...interface{})
 	log.Printf("[%s] %-7s %s %q %s", r.RemoteAddr, event, r.Method, r.URL.Path, message)
 }
 
-func write(r *http.Request, clock *Clock) (n int64, err error) {
+func write(r *http.Request, offset int64, clock *Clock) (n int64, err error) {
 	flags := os.O_RDWR
 	if *direct {
 		flags |= syscall.O_DIRECT
@@ -121,6 +131,10 @@ func write(r *http.Request, clock *Clock) (n int64, err error) {
 	}
 	// Should be safe to ignore error if Sync() succeeded.
 	defer file.Close()
+
+	if offset > 0 {
+		file.Seek(offset, 0)
+	}
 
 	src := &Reader{
 		r:       r.Body,
@@ -162,6 +176,21 @@ func write(r *http.Request, clock *Clock) (n int64, err error) {
 	}
 
 	return n, nil
+}
+
+// contentRangeStart parse the start value from Content-Range header.
+func contentRangeStart(r *http.Request) (n int64, err error) {
+	values := r.Header["Content-Range"]
+	if values == nil {
+		return 0, nil
+	}
+
+	matches := contentRangeRegexp.FindStringSubmatch(values[0])
+	if len(matches) < 4 {
+		return 0, fmt.Errorf("Invalid Content-Range header: %q", values)
+	}
+
+	return strconv.ParseInt(matches[1], 10, 64)
 }
 
 // errno unwraps syscall.Errno from wrapped errors.
