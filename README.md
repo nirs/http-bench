@@ -63,25 +63,29 @@ You can also use the python server for somewhat lower results:
 Run upload tests. This example uploads filename to the server using
 python httplib:
 
-    $ python upload-httplib.py filename http://localhost:8000/
+    $ ./upload-httplib filename http://localhost:8000/
 
 You can upload entire block device:
 
-    $ python upload-httplib.py /dev/sdb http://localhost:8000/
+    $ ./upload-httplib /dev/sdb http://localhost:8000/
 
 Or a character special file like /dev/zero - in this case you must
 specify the size of the upload:
 
-    $ python upload-httplib.py --size-gb 10 /dev/zero http://localhost:8000/
+    $ ./upload-httplib --size-mb 10240 /dev/zero http://localhost:8000/
 
 To test how block size effects the throughput:
 
-    $ python upload-httplib.py --blocksize-kb 512 --size-gb 10 /dev/zero http://localhost:8000/
+    $ ./upload-httplib --size-mb 10240 --blocksize-kb 512 /dev/zero http://localhost:8000/
+
+To test how number of worker threads effects the throughput:
+
+    $ ./upload-httplib --size-mb 10240 --workers 2 /dev/zero http://localhost:8000/
 
 
 ### Tests
 
-- upload-httplib.py - using httplib (http.client on python 3)
-- upload-requests.py - using the requests library
-- upload.go - go version, using HTTP/2 or HTTP/1.1. This tool ignores
+- upload-httplib - using httplib (http.client on python 3)
+- upload-requests - using the requests library
+- src/upload-go.go - go version, using HTTP/2 or HTTP/1.1. This tool ignores
   the --blocksize-kb option since go uses hardcoded value of 4kb.
